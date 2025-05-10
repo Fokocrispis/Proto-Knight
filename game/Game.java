@@ -40,9 +40,13 @@ public class Game {
     private final SceneManager sceneManager;
     private final PhysicsSystem physicsSystem;
     
+    // In Game.java, update these fields:
+
     // World size (for physics)
-    private final float worldWidth = 5000;
-    private final float worldHeight = 2000;
+    private final float worldWidth = 20000;  // 200m * 100 pixels per meter
+    private final float worldHeight = 3000;  // 30m * 100 pixels per meter
+
+ // Rest of the file remains the same
     
     /**
      * Creates a new game instance.

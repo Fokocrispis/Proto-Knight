@@ -7,60 +7,47 @@ import java.awt.image.BufferedImage;
 import game.resource.ResourceManager;
 
 /**
- * Represents a scrolling background layer with parallax effect.
+ * Background layer that has height (scene height - floor height) and ends at floor surface.
  */
 public class BackgroundLayer implements GameObject {
     private BufferedImage image;
     private Color color;
-    
     private double scrollFactorX;
-    private double scrollFactorY;
-    
-    private int width;
-    private int height;
+    private int tileWidth;
     
     /**
      * Creates a new background layer with an image.
      */
-    public BackgroundLayer(String imageName, double scrollFactorX, double scrollFactorY) {
+    public BackgroundLayer(String imageName, int tileWidth, double scrollFactorX) {
         try {
             this.image = ResourceManager.getInstance().loadImage(imageName);
             if (this.image != null) {
-                this.width = image.getWidth();
-                this.height = image.getHeight();
-                System.out.println("Loaded background layer: " + imageName + " (" + width + "x" + height + ")");
+                System.out.println("Loaded background layer: " + imageName);
             } else {
                 System.err.println("Failed to load background image: " + imageName);
-                // Use a default size if image fails to load
-                this.width = 1280;
-                this.height = 720;
             }
         } catch (Exception e) {
             System.err.println("Error loading background image: " + imageName);
             e.printStackTrace();
-            this.width = 1280;
-            this.height = 720;
         }
         
+        this.tileWidth = tileWidth;
         this.scrollFactorX = scrollFactorX;
-        this.scrollFactorY = scrollFactorY;
     }
     
     /**
      * Creates a new background layer with a solid color.
      */
-    public BackgroundLayer(Color color, int width, int height, double scrollFactorX, double scrollFactorY) {
+    public BackgroundLayer(Color color, int tileWidth, double scrollFactorX) {
         this.color = color;
         this.image = null;
-        this.width = width;
-        this.height = height;
+        this.tileWidth = tileWidth;
         this.scrollFactorX = scrollFactorX;
-        this.scrollFactorY = scrollFactorY;
     }
     
     @Override
     public void update(long deltaTime) {
-        // Background layers don't need updates
+        // No updates needed
     }
     
     @Override
@@ -69,48 +56,60 @@ public class BackgroundLayer implements GameObject {
     }
     
     /**
-     * Renders the background layer with parallax scrolling.
+     * Renders the background with proper height and positioning.
      * 
-     * @param g The graphics context
+     * @param g Graphics context
      * @param cameraX Camera X position
-     * @param cameraY Camera Y position
-     * @param viewportWidth Viewport width
-     * @param viewportHeight Viewport height
-     * @param floorY Y position of the floor
-     * @param backgroundWidth Background area width in pixels
-     * @param backgroundHeight Background area height in pixels
+     * @param sceneHeight Total scene height  
+     * @param floorHeight Height of the floor
+     * @param playerStartY Y position where player starts (on top of floor)
+     * @param sceneWidth Width of the scene
      */
-    public void renderWithCamera(Graphics2D g, double cameraX, double cameraY, int viewportWidth, int viewportHeight, 
-                                float floorY, int backgroundWidth, int backgroundHeight) {
-        // Calculate parallax scroll position
-        double scrollX = cameraX * scrollFactorX;
-        double scrollY = cameraY * scrollFactorY;
+    public void renderWithCamera(Graphics2D g, double cameraX, int sceneHeight, int floorHeight, int playerStartY, int sceneWidth) {
+        // Background height is scene height minus floor height
+        int backgroundHeight = sceneHeight - floorHeight;
         
-        // Calculate the background area (starting from floor, extending up 20m)
-        int backgroundY = (int)(floorY - backgroundHeight);
+        // Calculate the top surface of the floor
+        int floorSurfaceY = playerStartY - (floorHeight / 2);
         
-        // Calculate initial tile positions
-        int startX = (int) (scrollX % width);
-        if (startX > 0) startX -= width;
+        // Background ends at the floor surface
+        int backgroundBottom = floorSurfaceY;
         
-        // For Y, we want to start from the background top
-        int startY = backgroundY;
+        // Background starts above the floor surface
+        int backgroundTop = backgroundBottom - backgroundHeight;
         
-        // Draw the tiled background
+        // Calculate horizontal parallax offset
+        // The camera is already translating by -cameraX, so we need to add back
+        // some of that translation based on the parallax factor
+        // If scrollFactor is 0.0, the background should stay fixed (undo all camera movement)
+        // If scrollFactor is 1.0, the background should move with the camera (no parallax effect)
+        double parallaxX = cameraX * (1.0 - scrollFactorX);
+        
         if (image != null) {
-            // Draw image background only in the defined area
-            for (int x = startX; x < backgroundWidth + width; x += width) {
-                for (int y = startY; y < floorY + height; y += height) {
-                    // Only draw if within the background area
-                    if (y + height > backgroundY && y < floorY && x < backgroundWidth) {
-                        g.drawImage(image, x, y, null);
-                    }
-                }
+            // Calculate how many tiles we need
+            int tilesNeeded = (int)Math.ceil((double)sceneWidth / tileWidth) + 3;
+            
+            // Calculate which tiles are visible
+            int startTile = (int)Math.floor(parallaxX / tileWidth) - 1;
+            int endTile = startTile + tilesNeeded;
+            
+            // Draw the tiles
+            for (int i = startTile; i <= endTile; i++) {
+                int tileX = (int)(i * tileWidth - parallaxX);
+                
+                // Draw the tile
+                g.drawImage(image, 
+                           tileX, 
+                           backgroundTop,
+                           tileWidth,
+                           backgroundHeight,
+                           null);
             }
-        } else {
-            // Draw solid color background only in the defined area
+        } else if (color != null) {
+            // Draw solid color background
             g.setColor(color);
-            g.fillRect(0, backgroundY, backgroundWidth, backgroundHeight);
+            g.fillRect((int)(-parallaxX - tileWidth), backgroundTop, 
+                      sceneWidth + tileWidth * 2, backgroundHeight);
         }
     }
     
@@ -125,6 +124,6 @@ public class BackgroundLayer implements GameObject {
      * Gets the scroll factor Y.
      */
     public double getScrollFactorY() {
-        return scrollFactorY;
+        return 0.0;  // No vertical parallax
     }
 }
