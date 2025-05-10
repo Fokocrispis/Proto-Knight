@@ -16,6 +16,7 @@ public abstract class AbstractEntity implements GameObject, PhysicsObject {
     // Position and size
     protected Vector2D position;
     protected Vector2D velocity;
+    protected static int maxSpeedY = 1000;
     protected int width;
     protected int height;
     
@@ -83,7 +84,12 @@ public abstract class AbstractEntity implements GameObject, PhysicsObject {
     
     @Override
     public void setVelocity(Vector2D velocity) {
-        this.velocity = velocity;
+    	if(velocity.getY()>maxSpeedY) {
+    		this.velocity= new Vector2D(velocity.getX(), maxSpeedY);
+    	}
+    	else {
+    		this.velocity = velocity;
+    	}
     }
     
     @Override

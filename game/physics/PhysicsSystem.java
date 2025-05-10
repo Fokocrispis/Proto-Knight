@@ -10,7 +10,7 @@ import game.Vector2D;
  */
 public class PhysicsSystem {
     // Increased gravity for better game feel
-    private static final Vector2D DEFAULT_GRAVITY = new Vector2D(0, 30.0);
+    private static final Vector2D DEFAULT_GRAVITY = new Vector2D(0, 1000.0);
     
     private final List<PhysicsObject> physicsObjects;
     private final Vector2D gravity;

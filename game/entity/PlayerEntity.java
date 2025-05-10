@@ -15,7 +15,7 @@ import game.physics.PhysicsObject;
 public class PlayerEntity extends AbstractEntity {
     // Movement parameters - significantly increased for better feel
     private static final double MOVE_SPEED = 25; // increased from 0.3
-    private static final double JUMP_FORCE = -2500.0; // increased from -10.0
+    private static final double JUMP_FORCE = -550.0; // increased from -10.0
     private static final double MAX_SPEED = 1000.0; // increased from 0.5
     private static final double GROUND_FRICTION = 0.9;
     private static final double AIR_RESISTANCE = 0.8;
@@ -47,7 +47,7 @@ public class PlayerEntity extends AbstractEntity {
         this.color = Color.RED;
         
         // Player-specific physics properties
-        this.mass = 1.0f;
+        this.mass = 1.0F;
         this.affectedByGravity = true;
     }
     
@@ -106,6 +106,13 @@ public class PlayerEntity extends AbstractEntity {
         
         // Jump - ensure there's a small delay between jumps
         long currentTime = System.currentTimeMillis();
+        if(input.isKeyPressed(KeyEvent.VK_SPACE)&& 
+                (currentTime - lastJumpTime > 750)) {
+        	velocity.setY(JUMP_FORCE);
+        	lastJumpTime = currentTime;
+        	isOnGround = false;
+        }
+        /*
         if (input.isKeyPressed(KeyEvent.VK_SPACE) && isOnGround && canJump && 
             (currentTime - lastJumpTime > 250)) {
             velocity.setY(JUMP_FORCE);
@@ -113,6 +120,7 @@ public class PlayerEntity extends AbstractEntity {
             canJump = false;
             lastJumpTime = currentTime;
         }
+        */
     }
     
     /**
@@ -157,8 +165,8 @@ public class PlayerEntity extends AbstractEntity {
         g.drawLine(
             centerX, 
             centerY, 
-            (int)(centerX + velocity.getX() * 5), 
-            (int)(centerY + velocity.getY() * 5)
+            (int)(centerX + velocity.getX()/5), 
+            (int)(centerY + velocity.getY()/5)
         );
     }
     
