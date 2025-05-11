@@ -5,10 +5,12 @@ import java.awt.image.BufferedImage;
 
 import game.physics.Collision;
 import game.physics.PhysicsObject;
+import game.physics.AABB;
 import game.resource.ResourceManager;
+import game.Vector2D;
 
 /**
- * A floor entity that uses sprites tiled with consistent 2 meter width.
+ * Fixed FloorEntity configured to work properly with new physics system
  */
 public class FloorEntity extends AbstractEntity {
     private BufferedImage textureDirt;
@@ -23,8 +25,13 @@ public class FloorEntity extends AbstractEntity {
         super(x, y, width, height);
         
         // Floor-specific physics properties
-        this.mass = 0; // Infinite mass (immovable)
+        this.mass = 0; // Static object (immovable)
         this.affectedByGravity = false;
+        this.restitution = 0.0f; // No bounce
+        this.friction = 0.9f; // High friction for good control
+        
+        // Ensure collision shape is properly sized and positioned
+        this.collisionShape = new AABB(position, width, height);
         
         // Load floor sprites
         loadSprites();
@@ -46,6 +53,15 @@ public class FloorEntity extends AbstractEntity {
         } catch (Exception e) {
             System.err.println("Failed to load floor sprites: " + e.getMessage());
             e.printStackTrace();
+        }
+    }
+    
+    @Override
+    public void update(long deltaTime) {
+        // No update needed for static floor
+        // Just ensure the collision shape stays in place
+        if (collisionShape != null) {
+            collisionShape.setPosition(position);
         }
     }
     
@@ -84,18 +100,32 @@ public class FloorEntity extends AbstractEntity {
             width,
             height
         );
-        
-        // Debug: Show tile boundaries
-        g.setColor(new java.awt.Color(0, 255, 0, 80));
-        for (int i = 1; i < tilesNeeded; i++) {
-            int tileX = startX + i * TILE_WIDTH;
-            g.drawLine(tileX, startY, tileX, startY + height);
-        }
         */
     }
     
     @Override
     public void onCollision(PhysicsObject other, Collision collision) {
         // Floor doesn't react to collisions
+        // The physics system will handle all resolution for static objects
+    }
+    
+    @Override
+    public void setPosition(Vector2D position) {
+        // Override to ensure floor stays in place
+        super.setPosition(position);
+        // Make sure collision shape is always updated
+        if (collisionShape != null) {
+            collisionShape.setPosition(this.position);
+        }
+    }
+    
+    @Override
+    public void setPosition(double x, double y) {
+        // Override to ensure floor stays in place
+        super.setPosition(x, y);
+        // Make sure collision shape is always updated
+        if (collisionShape != null) {
+            collisionShape.setPosition(this.position);
+        }
     }
 }

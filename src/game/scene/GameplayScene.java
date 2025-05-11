@@ -4,6 +4,7 @@ import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.event.KeyEvent;
 import java.util.Random;
+import java.util.Map;
 
 import game.BackgroundLayer;
 import game.Game;
@@ -11,6 +12,8 @@ import game.GameObject;
 import game.Vector2D;
 import game.audio.SoundManager;
 import game.entity.BoxEntity;
+import game.entity.BuffEffect;
+import game.entity.BuffType;
 import game.entity.PlayerEntity;
 import game.entity.PlatformEntity;
 import game.entity.FloorEntity;
@@ -20,7 +23,7 @@ import game.sprites.LoopingSprite;
 import game.sprites.ProperlyScaledSprite;
 
 /**
- * Main gameplay scene with 1.6m character and fixed sprite looping
+ * Updated gameplay scene with enhanced physics and collision layers
  */
 public class GameplayScene extends AbstractScene {
     private PlayerEntity player;
@@ -99,9 +102,9 @@ public class GameplayScene extends AbstractScene {
             game.getKeyboardInput()
         );
         
-        // Add player to game objects and physics system
+        // Add player to game objects and physics system with proper collision layer
         addGameObject(player);
-        game.getPhysicsSystem().addObject(player);
+        game.getPhysicsSystem().addObject(player, "player");
         
         // Set player as camera target
         camera.setTarget(player.getPosition());
@@ -159,9 +162,10 @@ public class GameplayScene extends AbstractScene {
         floor.setAffectedByGravity(false);
         floor.setMass(0);
         floor.setVelocity(new Vector2D(0, 0));
+        floor.setFriction(0.8f);  // High friction for floor
         
         addGameObject(floor);
-        game.getPhysicsSystem().addObject(floor);
+        game.getPhysicsSystem().addObject(floor, "ground");
     }
     
     /**
@@ -176,6 +180,7 @@ public class GameplayScene extends AbstractScene {
         createPlatform(80 * SCALE, floorY - 4 * SCALE, 3 * SCALE, 1 * SCALE);
         createPlatform(120 * SCALE, floorY - 8 * SCALE, 3 * SCALE, 1 * SCALE);
         createPlatform(160 * SCALE, floorY - 6 * SCALE, 3 * SCALE, 1 * SCALE);
+        createPlatform(190 * SCALE, floorY - 2 * SCALE, 3 * SCALE, 1 * SCALE);
     }
     
     /**
@@ -187,9 +192,10 @@ public class GameplayScene extends AbstractScene {
         platform.setAffectedByGravity(false);
         platform.setMass(0);
         platform.setVelocity(new Vector2D(0, 0));
+        platform.setFriction(0.7f);  // Good friction for platforms
         
         addGameObject(platform);
-        game.getPhysicsSystem().addObject(platform);
+        game.getPhysicsSystem().addObject(platform, "platform");
     }
     
     /**
@@ -211,8 +217,11 @@ public class GameplayScene extends AbstractScene {
             );
             
             BoxEntity box = new BoxEntity(x, y, size, size, color);
+            box.setFriction(0.6f);
+            box.setRestitution(0.3f);  // Slightly bouncy
+            
             addGameObject(box);
-            game.getPhysicsSystem().addObject(box);
+            game.getPhysicsSystem().addObject(box, "enemy");  // Using enemy layer for test boxes
         }
     }
     
@@ -302,30 +311,8 @@ public class GameplayScene extends AbstractScene {
             floor.setPosition(SCENE_WIDTH / 2, SCENE_HEIGHT - FLOOR_HEIGHT / 2);
         }
         
-        // Check if player has reached the scene boundaries
-        float floorY = (float)(SCENE_HEIGHT - FLOOR_HEIGHT);
-        float sceneTop = 0;
-        
-        if (player != null) {
-            // Constrain player position within the scene
-            double playerX = player.getPosition().getX();
-            double playerY = player.getPosition().getY();
-            
-            // Check horizontal boundaries
-            if (playerX < 0) {
-                player.setPosition(0, playerY);
-                player.setVelocity(new Vector2D(Math.max(0, player.getVelocity().getX()), player.getVelocity().getY()));
-            } else if (playerX > SCENE_WIDTH) {
-                player.setPosition(SCENE_WIDTH, playerY);
-                player.setVelocity(new Vector2D(Math.min(0, player.getVelocity().getX()), player.getVelocity().getY()));
-            }
-            
-            // Check vertical boundaries
-            if (playerY < sceneTop) {
-                player.setPosition(playerX, sceneTop);
-                player.setVelocity(new Vector2D(player.getVelocity().getX(), 0));
-            }
-        }
+        // Handle special controls for testing movement abilities
+        handleTestControls();
         
         // Check for scene change
         if (game.getKeyboardInput().isKeyJustPressed(KeyEvent.VK_ESCAPE)) {
@@ -336,6 +323,31 @@ public class GameplayScene extends AbstractScene {
         // Check if player has fallen off the world
         if (player.getPosition().getY() > SCENE_HEIGHT + 100) {
             resetPlayer();
+        }
+    }
+    
+    /**
+     * Handles test controls for movement abilities
+     */
+    private void handleTestControls() {
+        // Add speed buff with 1 key
+        if (game.getKeyboardInput().isKeyJustPressed(KeyEvent.VK_1)) {
+            player.addBuffEffect(BuffType.SPEED, 5000);
+        }
+        
+        // Add jump height buff with 2 key
+        if (game.getKeyboardInput().isKeyJustPressed(KeyEvent.VK_2)) {
+            player.addBuffEffect(BuffType.JUMP_HEIGHT, 5000);
+        }
+        
+        // Add double jump buff with 3 key
+        if (game.getKeyboardInput().isKeyJustPressed(KeyEvent.VK_3)) {
+            player.addBuffEffect(BuffType.DOUBLE_JUMP, 10000);
+        }
+        
+        // Add gravity dash buff with 4 key
+        if (game.getKeyboardInput().isKeyJustPressed(KeyEvent.VK_4)) {
+            player.addBuffEffect(BuffType.GRAVITY_DASH, 5000);
         }
     }
     
@@ -421,48 +433,60 @@ public class GameplayScene extends AbstractScene {
         // Display controls
         g.drawString("Controls:", 20, 30);
         g.drawString("Arrow Keys - Move", 20, 50);
-        g.drawString("Space - Jump", 20, 70);
-        g.drawString("Shift - Run", 20, 90);
-        g.drawString("P - Pause", 20, 110);
-        g.drawString("ESC - Menu", 20, 130);
+        g.drawString("X - Run", 20, 70);
+        g.drawString("Space - Jump", 20, 90);
+        g.drawString("W - Dash", 20, 110);
+        g.drawString("E - Teleport", 20, 130);
+        g.drawString("Q - Close Teleport", 20, 150);
+        g.drawString("R - Hook", 20, 170);
+        g.drawString("Shift - Block", 20, 190);
+        g.drawString("P - Pause", 20, 210);
+        g.drawString("ESC - Menu", 20, 230);
+        
+        // Test controls
+        g.drawString("Test Buffs:", 20, 260);
+        g.drawString("1 - Speed Buff", 20, 280);
+        g.drawString("2 - Jump Height Buff", 20, 300);
+        g.drawString("3 - Double Jump", 20, 320);
+        g.drawString("4 - Gravity Dash", 20, 340);
         
         // Audio controls
-        g.drawString("NumPad +/- - Volume", 20, 160);
-        g.drawString("Ctrl + NumPad +/- - Music Volume", 20, 180);
+        g.drawString("NumPad +/- - Volume", 20, 370);
+        g.drawString("Ctrl + NumPad +/- - Music Volume", 20, 390);
         
         // Scene info
-        g.drawString("Scene dimensions: " + SCENE_WIDTH_METERS + "m x " + SCENE_HEIGHT_METERS + "m", 20, 210);
+        g.drawString("Scene dimensions: " + SCENE_WIDTH_METERS + "m x " + SCENE_HEIGHT_METERS + "m", 20, 420);
         
         // Volume indicators
-        g.drawString(String.format("Master Volume: %d%%", (int)(soundManager.getMasterVolume() * 100)), 20, 240);
-        g.drawString(String.format("Music Volume: %d%%", (int)(soundManager.getMusicVolume() * 100)), 20, 260);
-        g.drawString(String.format("SFX Volume: %d%%", (int)(soundManager.getSfxVolume() * 100)), 20, 280);
+        g.drawString(String.format("Master Volume: %d%%", (int)(soundManager.getMasterVolume() * 100)), 20, 450);
+        g.drawString(String.format("Music Volume: %d%%", (int)(soundManager.getMusicVolume() * 100)), 20, 470);
+        g.drawString(String.format("SFX Volume: %d%%", (int)(soundManager.getSfxVolume() * 100)), 20, 490);
         
         // Player info
         if (player != null) {
-            int yOffset = 320;
+            int yOffset = 530;
             g.drawString("Player Height: 1.6m (" + player.getHeight() + " pixels)", 20, yOffset);
             g.drawString("Player Position: " + formatVector(player.getPosition()), 20, yOffset + 20);
             g.drawString("Player Velocity: " + formatVector(player.getVelocity()), 20, yOffset + 40);
-            g.drawString("On Ground: " + (player.isOnGround() ? "Yes" : "No"), 20, yOffset + 60);
+            g.drawString("Player State: " + player.getCurrentState(), 20, yOffset + 60);
+            g.drawString("On Ground: " + (player.isOnGround() ? "Yes" : "No"), 20, yOffset + 80);
             
-            if (player.getCurrentSprite() != null) {
-                g.drawString("Current Sprite: " + player.getCurrentSprite().getName(), 20, yOffset + 80);
-                
-                Sprite sprite = player.getCurrentSprite();
-                g.drawString("Sprite Size: " + sprite.getSize().width + "x" + sprite.getSize().height, 20, yOffset + 100);
-                
-                if (sprite instanceof LoopingSprite) {
-                    LoopingSprite loopingSprite = (LoopingSprite) sprite;
-                    g.drawString("Looping: " + loopingSprite.isLooping(), 20, yOffset + 120);
-                    g.drawString("Completed: " + loopingSprite.hasCompleted(), 20, yOffset + 140);
+            // Active buffs
+            Map<BuffType, BuffEffect> activeBuffs = player.getActiveBuffs();
+            if (!activeBuffs.isEmpty()) {
+                g.drawString("Active Buffs:", 20, yOffset + 100);
+                int buffOffset = 0;
+                for (Map.Entry<BuffType, BuffEffect> entry : activeBuffs.entrySet()) {
+                    BuffType buffType = entry.getKey();
+                    BuffEffect buff = entry.getValue();
+                    g.drawString("  " + buffType + " (" + buff.timeRemaining/1000 + "s)", 20, yOffset + 120 + buffOffset * 20);
+                    buffOffset++;
                 }
-            } else {
-                g.drawString("Loading sprites...", 20, yOffset + 80);
             }
             
-            g.drawString("Running: " + (player.isRunning() ? "Yes" : "No"), 20, yOffset + 160);
-            g.drawString("Walking: " + (player.isWalking() ? "Yes" : "No"), 20, yOffset + 180);
+            if (player.getCurrentSprite() != null) {
+                g.drawString("Current Sprite: " + player.getCurrentSprite().getName(), 20, yOffset + 200);
+            }
         }
         
         // Draw pause screen if paused
@@ -492,27 +516,33 @@ public class GameplayScene extends AbstractScene {
                 player.getHeight()
             );
             
-            // Draw height indicator
-            g.setColor(Color.YELLOW);
-            g.drawString("Height: 1.6m (" + player.getHeight() + "px)", 
-                        (int)player.getPosition().getX() - 50, 
-                        (int)player.getPosition().getY() - player.getHeight() / 2 - 5);
+            // Draw movement abilities range indicators
+            g.setColor(new Color(0, 255, 255, 80));
             
-            // Draw sprite bounds
-            if (player.getCurrentSprite() != null) {
-                Sprite currentSprite = player.getCurrentSprite();
-                g.setColor(new Color(0, 255, 0, 128));
-                
-                if (currentSprite instanceof ProperlyScaledSprite) {
-                    ProperlyScaledSprite scaledSprite = (ProperlyScaledSprite) currentSprite;
-                    int renderX = scaledSprite.getRenderX(player.getPosition().getX());
-                    int renderY = scaledSprite.getRenderY(player.getPosition().getY(), player.getHeight());
-                    
-                    g.drawRect(renderX, renderY, 
-                              currentSprite.getSize().width, 
-                              currentSprite.getSize().height);
-                }
-            }
+            // Teleport range
+            g.drawArc(
+                (int)(player.getPosition().getX() - 150),
+                (int)(player.getPosition().getY() - 150),
+                300, 300, 0, 360
+            );
+            
+            // Hook range
+            g.setColor(new Color(255, 255, 0, 80));
+            g.drawArc(
+                (int)(player.getPosition().getX() - 300),
+                (int)(player.getPosition().getY() - 300),
+                600, 600, 0, 360
+            );
+            
+            // Facing direction indicator
+            g.setColor(Color.WHITE);
+            int dirX = player.isFacingRight() ? 40 : -40;
+            g.drawLine(
+                (int)player.getPosition().getX(),
+                (int)player.getPosition().getY(),
+                (int)player.getPosition().getX() + dirX,
+                (int)player.getPosition().getY()
+            );
         }
     }
     

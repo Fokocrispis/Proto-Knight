@@ -10,13 +10,13 @@ import game.physics.CollisionShape;
 import game.physics.PhysicsObject;
 
 /**
- * Base class for all game entities with position, size, and optional physics.
+ * Enhanced base class for all game entities with improved physics support
  */
 public abstract class AbstractEntity implements GameObject, PhysicsObject {
     // Position and size
     protected Vector2D position;
     protected Vector2D velocity;
-    protected static int maxSpeedY = 1000;
+    protected Vector2D acceleration;
     protected int width;
     protected int height;
     
@@ -25,25 +25,34 @@ public abstract class AbstractEntity implements GameObject, PhysicsObject {
     protected boolean affectedByGravity;
     protected boolean collidable;
     protected CollisionShape collisionShape;
+    protected int collisionLayer = 0;
+    protected boolean onGround = false;
+    
+    // Material properties
+    protected float friction = 0.5f;
+    protected float restitution = 0.0f;
+    protected float drag = 0.01f;
+    protected float linearDamping = 0.95f;
+    
+    // Speed limits
+    protected float maxSpeedX = 1000f;
+    protected float maxSpeedY = 1500f;
     
     // Entity state
     protected boolean active = true;
     protected boolean visible = true;
     
-    // Entity tag for identification
+    // Entity identification
     protected String tag = "";
+    protected String name = "";
     
     /**
-     * Creates a new entity.
-     * 
-     * @param x Initial X position
-     * @param y Initial Y position
-     * @param width Width of the entity
-     * @param height Height of the entity
+     * Creates a new entity with position and size.
      */
     public AbstractEntity(double x, double y, int width, int height) {
         this.position = new Vector2D(x, y);
         this.velocity = new Vector2D(0, 0);
+        this.acceleration = new Vector2D(0, 0);
         this.width = width;
         this.height = height;
         
@@ -52,14 +61,33 @@ public abstract class AbstractEntity implements GameObject, PhysicsObject {
         this.affectedByGravity = true;
         this.collidable = true;
         
-        // Create a default AABB collision shape
+        // Create default AABB collision shape
         this.collisionShape = new AABB(position, width, height);
     }
     
     @Override
     public void update(long deltaTime) {
+        if (!active) return;
+        
+        // Update acceleration (if any forces are applied)
+        velocity.add(acceleration.times(deltaTime / 1000.0));
+        
+        // Apply velocity limits
+        velocity.setX(Math.max(-maxSpeedX, Math.min(maxSpeedX, velocity.getX())));
+        velocity.setY(Math.max(-maxSpeedY, Math.min(maxSpeedY, velocity.getY())));
+        
+        // Apply linear damping
+        if (!onGround) {
+            velocity.multiply(Math.pow(linearDamping, deltaTime / 1000.0));
+        }
+        
+        // Reset acceleration for next frame
+        acceleration.set(0, 0);
+        
         // Update collision shape position
-        collisionShape.setPosition(position);
+        if (collisionShape != null) {
+            collisionShape.setPosition(position);
+        }
     }
     
     @Override
@@ -78,18 +106,21 @@ public abstract class AbstractEntity implements GameObject, PhysicsObject {
     }
     
     @Override
+    public void setPosition(Vector2D position) {
+        this.position.set(position);
+        if (collisionShape != null) {
+            collisionShape.setPosition(position);
+        }
+    }
+    
+    @Override
     public Vector2D getVelocity() {
         return velocity;
     }
     
     @Override
     public void setVelocity(Vector2D velocity) {
-    	if(velocity.getY()>maxSpeedY) {
-    		this.velocity= new Vector2D(velocity.getX(), maxSpeedY);
-    	}
-    	else {
-    		this.velocity = velocity;
-    	}
+        this.velocity.set(velocity);
     }
     
     @Override
@@ -98,8 +129,18 @@ public abstract class AbstractEntity implements GameObject, PhysicsObject {
     }
     
     @Override
+    public void setMass(float mass) {
+        this.mass = mass;
+    }
+    
+    @Override
     public boolean isAffectedByGravity() {
         return affectedByGravity;
+    }
+    
+    @Override
+    public void setAffectedByGravity(boolean affected) {
+        this.affectedByGravity = affected;
     }
     
     @Override
@@ -108,69 +149,111 @@ public abstract class AbstractEntity implements GameObject, PhysicsObject {
     }
     
     @Override
-    public void onCollision(PhysicsObject other, Collision collision) {
-        // Base implementation does nothing, subclasses should override
-    }
-    
-    /**
-     * Sets the position of this entity.
-     * 
-     * @param x The new X position
-     * @param y The new Y position
-     */
-    public void setPosition(double x, double y) {
-        this.position.set(x, y);
-    }
-    
-    /**
-     * Sets the position of this entity.
-     * 
-     * @param position The new position
-     */
-    public void setPosition(Vector2D position) {
-        this.position.set(position);
-    }
-    
-    /**
-     * Sets whether this entity is affected by gravity.
-     * 
-     * @param affectedByGravity True if affected by gravity, false otherwise
-     */
-    public void setAffectedByGravity(boolean affectedByGravity) {
-        this.affectedByGravity = affectedByGravity;
-    }
-    
-    /**
-     * Sets whether this entity can collide with others.
-     * 
-     * @param collidable True if can collide, false otherwise
-     */
     public void setCollidable(boolean collidable) {
         this.collidable = collidable;
     }
     
-    /**
-     * Sets the collision shape for this entity.
-     * 
-     * @param shape The new collision shape
-     */
-    public void setCollisionShape(CollisionShape shape) {
-        this.collisionShape = shape;
+    @Override
+    public int getCollisionLayer() {
+        return collisionLayer;
+    }
+    
+    @Override
+    public void setCollisionLayer(int layer) {
+        this.collisionLayer = layer;
+    }
+    
+    @Override
+    public boolean isOnGround() {
+        return onGround;
+    }
+    
+    @Override
+    public void setOnGround(boolean onGround) {
+        this.onGround = onGround;
+    }
+    
+    @Override
+    public void onCollision(PhysicsObject other, Collision collision) {
+        // Base implementation does nothing, subclasses should override
+    }
+    
+    @Override
+    public float getFriction() {
+        return friction;
+    }
+    
+    @Override
+    public float getRestitution() {
+        return restitution;
+    }
+    
+    @Override
+    public float getDrag() {
+        return drag;
+    }
+    
+    @Override
+    public float getLinearDamping() {
+        return linearDamping;
     }
     
     /**
-     * Sets the mass of this entity.
-     * 
-     * @param mass The new mass
+     * Sets the position of this entity.
      */
-    public void setMass(float mass) {
-        this.mass = mass;
+    public void setPosition(double x, double y) {
+        position.set(x, y);
+        if (collisionShape != null) {
+            collisionShape.setPosition(position);
+        }
+    }
+    
+    /**
+     * Applies a force to this entity.
+     */
+    public void applyForce(double forceX, double forceY) {
+        if (mass <= 0) return;
+        
+        // F = ma, so a = F/m
+        acceleration.add(forceX / mass, forceY / mass);
+    }
+    
+    /**
+     * Applies an impulse to this entity.
+     */
+    public void applyImpulse(double impulseX, double impulseY) {
+        if (mass <= 0) return;
+        
+        // Apply impulse directly to velocity
+        velocity.add(impulseX / mass, impulseY / mass);
+    }
+    
+    /**
+     * Sets the friction coefficient.
+     */
+    public void setFriction(float friction) {
+        this.friction = Math.max(0.0f, Math.min(1.0f, friction));
+    }
+    
+    /**
+     * Sets the restitution (bounciness).
+     */
+    public void setRestitution(float restitution) {
+        this.restitution = Math.max(0.0f, Math.min(1.0f, restitution));
+    }
+    
+    /**
+     * Sets the collision shape for this entity.
+     */
+    public void setCollisionShape(CollisionShape shape) {
+        this.collisionShape = shape;
+        if (shape != null) {
+            shape.setPosition(position);
+        }
     }
     
     /**
      * Gets the width of this entity.
-     * 
-     * @return The width
      */
     public int getWidth() {
         return width;
@@ -178,35 +261,26 @@ public abstract class AbstractEntity implements GameObject, PhysicsObject {
     
     /**
      * Gets the height of this entity.
-     * 
-     * @return The height
      */
     public int getHeight() {
         return height;
     }
     
     /**
-     * Sets the width of this entity.
-     * 
-     * @param width The new width
+     * Sets the size of this entity.
      */
-    public void setWidth(int width) {
+    public void setSize(int width, int height) {
         this.width = width;
-    }
-    
-    /**
-     * Sets the height of this entity.
-     * 
-     * @param height The new height
-     */
-    public void setHeight(int height) {
         this.height = height;
+        
+        // Update collision shape
+        if (collisionShape instanceof AABB) {
+            collisionShape = new AABB(position, width, height);
+        }
     }
     
     /**
      * Checks if this entity is active.
-     * 
-     * @return True if active, false otherwise
      */
     public boolean isActive() {
         return active;
@@ -214,8 +288,6 @@ public abstract class AbstractEntity implements GameObject, PhysicsObject {
     
     /**
      * Sets whether this entity is active.
-     * 
-     * @param active True if active, false otherwise
      */
     public void setActive(boolean active) {
         this.active = active;
@@ -223,8 +295,6 @@ public abstract class AbstractEntity implements GameObject, PhysicsObject {
     
     /**
      * Checks if this entity is visible.
-     * 
-     * @return True if visible, false otherwise
      */
     public boolean isVisible() {
         return visible;
@@ -232,8 +302,6 @@ public abstract class AbstractEntity implements GameObject, PhysicsObject {
     
     /**
      * Sets whether this entity is visible.
-     * 
-     * @param visible True if visible, false otherwise
      */
     public void setVisible(boolean visible) {
         this.visible = visible;
@@ -241,8 +309,6 @@ public abstract class AbstractEntity implements GameObject, PhysicsObject {
     
     /**
      * Gets the tag of this entity.
-     * 
-     * @return The tag
      */
     public String getTag() {
         return tag;
@@ -250,10 +316,44 @@ public abstract class AbstractEntity implements GameObject, PhysicsObject {
     
     /**
      * Sets the tag of this entity.
-     * 
-     * @param tag The new tag
      */
     public void setTag(String tag) {
         this.tag = tag;
+    }
+    
+    /**
+     * Gets the name of this entity.
+     */
+    public String getName() {
+        return name;
+    }
+    
+    /**
+     * Sets the name of this entity.
+     */
+    public void setName(String name) {
+        this.name = name;
+    }
+    
+    /**
+     * Sets maximum speeds for this entity.
+     */
+    public void setMaxSpeed(float maxSpeedX, float maxSpeedY) {
+        this.maxSpeedX = maxSpeedX;
+        this.maxSpeedY = maxSpeedY;
+    }
+    
+    /**
+     * Gets the maximum horizontal speed.
+     */
+    public float getMaxSpeedX() {
+        return maxSpeedX;
+    }
+    
+    /**
+     * Gets the maximum vertical speed.
+     */
+    public float getMaxSpeedY() {
+        return maxSpeedY;
     }
 }

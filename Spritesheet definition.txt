@@ -20,3 +20,47 @@ simple definitions of rows:
 8. blocking (optional frames in the middle for hit on block)
 9. Dashing on landing
 
+This asset comes with 29 animations with transitions between some states:
+
+    Idle - 6 frames;
+    Walk - 24 frames;
+    Run (both directions) - 11 frames;
+    Block - 21 frames;
+    Hurt - 6 frames;
+    Jump And Fall - 15 frames;
+    3x Combo Sword Slash Attack - 29 frames;
+    Roll - 14 frames;
+    Slide - 10 frames;
+    Dash - 8 frames (Dash effect not included, check Smoke Effect 02 by pimen  :D);
+    Sprint Jump - 25 frames;
+    Death - 26 frames;
+
+Pack #2:
+
+    Cast Sword Buff - 20 frames;
+    Cast Shield Buff - 16 frames;
+    Light Cut - 28 frames.
+
+Pack #3:
+
+    Edge Grab - 23 frames;
+    Land Hard - 11 frames;
+    Air Atk - 16 frames. 
+
+Pack #4:
+
+    Ladder In/Out - 24 frames;
+    Counter Atk - 24 frames;
+    Holy Heal - 26 frames.
+
+Pack #5:
+
+    Sprint - 14 frames;
+    Holy Slash - 27 frames;
+    Saint Heal - 34 frames.
+
+Pack #6:
+
+    Back Dash- 11 frames;
+    Crouch - 11 frames;
+    Air Heavy Atk (2 poses) - 19 frames. 

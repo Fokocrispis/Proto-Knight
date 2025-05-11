@@ -2,23 +2,35 @@ package game.physics;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.Iterator;
 
 import game.Vector2D;
 
 /**
- * Improved physics system with better ground detection
+ * Fixed physics system with proper static object collision handling
  */
 public class PhysicsSystem {
-    private static final Vector2D DEFAULT_GRAVITY = new Vector2D(0, 1000.0);
+    private static final Vector2D DEFAULT_GRAVITY = new Vector2D(0, 1400.0);
     
     private final List<PhysicsObject> physicsObjects;
     private final Vector2D gravity;
     private final float worldWidth;
     private final float worldHeight;
     
-    // Collision detection settings
-    private final int maxIterations = 5;
-    private final double groundDetectionTolerance = 2.0;
+    // Physics parameters
+    private final int maxIterations = 10;
+    private final double groundRayDistance = 5.0;
+    private final double minimumPenetration = 0.01;
+    private final float groundFriction = 0.9f;
+    private final float airDrag = 0.999f;
+    private final float positionCorrectionPercent = 0.8f;
+    private final float slop = 0.02f;
+    
+    // Collision layers
+    private final Map<String, Integer> collisionLayers = new HashMap<>();
+    private final Map<Integer, List<Integer>> collisionMatrix = new HashMap<>();
     
     public PhysicsSystem(float worldWidth, float worldHeight) {
         this(worldWidth, worldHeight, DEFAULT_GRAVITY);
@@ -29,12 +41,46 @@ public class PhysicsSystem {
         this.worldWidth = worldWidth;
         this.worldHeight = worldHeight;
         this.gravity = new Vector2D(gravity);
+        initializeCollisionLayers();
+    }
+    
+    private void initializeCollisionLayers() {
+        // Define collision layers
+        collisionLayers.put("player", 0);
+        collisionLayers.put("enemy", 1);
+        collisionLayers.put("ground", 2);
+        collisionLayers.put("platform", 3);
+        collisionLayers.put("projectile", 4);
+        collisionLayers.put("trigger", 5);
+        collisionLayers.put("default", 99);
+        
+        // Define which layers can collide with each other
+        addCollisionRule(0, new int[]{1, 2, 3}); // Player collides with enemies, ground, platforms
+        addCollisionRule(1, new int[]{0, 2, 3, 4}); // Enemies collide with player, ground, platforms, projectiles
+        addCollisionRule(2, new int[]{0, 1, 4}); // Ground collides with player, enemies, projectiles
+        addCollisionRule(3, new int[]{0, 1, 4}); // Platforms collides with player, enemies, projectiles
+        addCollisionRule(4, new int[]{1, 2, 3}); // Projectiles collide with enemies, ground, platforms
+        addCollisionRule(5, new int[]{0}); // Triggers only collide with player
+        addCollisionRule(99, new int[]{0, 1, 2, 3, 4, 5}); // Default layer collides with all
+    }
+    
+    private void addCollisionRule(int layer, int[] collidesWithLayers) {
+        List<Integer> list = new ArrayList<>();
+        for (int other : collidesWithLayers) {
+            list.add(other);
+        }
+        collisionMatrix.put(layer, list);
+    }
+    
+    public void addObject(PhysicsObject object, String layerName) {
+        if (!physicsObjects.contains(object)) {
+            physicsObjects.add(object);
+            object.setCollisionLayer(collisionLayers.getOrDefault(layerName, 99));
+        }
     }
     
     public void addObject(PhysicsObject object) {
-        if (!physicsObjects.contains(object)) {
-            physicsObjects.add(object);
-        }
+        addObject(object, "default");
     }
     
     public void removeObject(PhysicsObject object) {
@@ -42,114 +88,108 @@ public class PhysicsSystem {
     }
     
     /**
-     * Updates the physics system with improved ground detection
+     * Main physics update loop
      */
     public void update(long deltaTimeMs) {
         float dt = deltaTimeMs / 1000.0f;
-        dt = Math.min(dt, 0.05f); // Limit time step
+        dt = Math.min(dt, 0.02f); // Cap time step
         
-        // Apply forces
-        applyForces(dt);
+        // Multiple substeps for stability
+        int substeps = 3;
+        float subDt = dt / substeps;
         
-        // Update positions
-        updatePositions(dt);
-        
-        // Detect and resolve collisions with improved ground detection
-        for (int i = 0; i < maxIterations; i++) {
-            boolean hadCollision = detectAndResolveCollisions();
-            if (!hadCollision) break;
+        for (int step = 0; step < substeps; step++) {
+            // First: Apply forces and gravity
+            applyForcesAndGravity(subDt);
+            
+            // Second: Move objects
+            integratePositions(subDt);
+            
+            // Third: Detect and resolve all collisions (including floor)
+            for (int i = 0; i < maxIterations; i++) {
+                boolean hadCollision = detectAndResolveAllCollisions();
+                if (!hadCollision) break;
+            }
+            
+            // Fourth: Additional ground detection for setting ground state
+            detectGroundState();
+            
+            // Fifth: Apply ground friction
+            applyGroundFriction(subDt);
         }
         
-        // Perform additional ground checks
-        performGroundDetection();
+        // Constrain to world bounds
+        constrainToWorldBounds();
     }
     
     /**
-     * Applies forces to physics objects
+     * Apply forces including gravity
      */
-    private void applyForces(float dt) {
+    private void applyForcesAndGravity(float dt) {
         for (PhysicsObject object : physicsObjects) {
             if (object.getMass() <= 0) continue;
             
+            Vector2D velocity = object.getVelocity();
+            
+            // Apply gravity
             if (object.isAffectedByGravity()) {
-                Vector2D velocity = object.getVelocity();
                 velocity.add(gravity.times(dt));
-                object.setVelocity(velocity);
             }
+            
+            // Apply air resistance
+            if (!object.isOnGround()) {
+                velocity.multiply(airDrag);
+            }
+            
+            object.setVelocity(velocity);
         }
     }
     
     /**
-     * Updates positions of physics objects
+     * Update positions based on velocity
      */
-    private void updatePositions(float dt) {
+    private void integratePositions(float dt) {
         for (PhysicsObject object : physicsObjects) {
             if (object.getMass() <= 0) continue;
             
             Vector2D position = object.getPosition();
             Vector2D velocity = object.getVelocity();
             
-            // Simple Euler integration
+            // Move object
             position.add(velocity.times(dt));
             
-            // Apply world boundaries
-            constrainToWorld(object);
+            // Update collision shape
+            object.getCollisionShape().setPosition(position);
         }
     }
     
     /**
-     * Constrains objects to world boundaries
+     * Detect and resolve all collisions including floor
      */
-    private void constrainToWorld(PhysicsObject object) {
-        AABB bounds = object.getCollisionShape().getBoundingBox();
-        Vector2D position = object.getPosition();
-        Vector2D velocity = object.getVelocity();
-        
-        // Check horizontal boundaries
-        if (bounds.getLeft() < 0) {
-            position.setX(bounds.getWidth() / 2);
-            if (velocity.getX() < 0) velocity.setX(0);
-        } else if (bounds.getRight() > worldWidth) {
-            position.setX(worldWidth - bounds.getWidth() / 2);
-            if (velocity.getX() > 0) velocity.setX(0);
-        }
-        
-        // Check vertical boundaries
-        if (bounds.getTop() < 0) {
-            position.setY(bounds.getHeight() / 2);
-            if (velocity.getY() < 0) velocity.setY(0);
-        } else if (bounds.getBottom() > worldHeight) {
-            position.setY(worldHeight - bounds.getHeight() / 2);
-            if (velocity.getY() > 0) velocity.setY(0);
-        }
-        
-        object.setVelocity(velocity);
-    }
-    
-    /**
-     * Detects and resolves collisions with improved precision
-     */
-    private boolean detectAndResolveCollisions() {
+    private boolean detectAndResolveAllCollisions() {
         boolean hadCollision = false;
         
         for (int i = 0; i < physicsObjects.size(); i++) {
             PhysicsObject objectA = physicsObjects.get(i);
-            
             if (!objectA.isCollidable()) continue;
             
             for (int j = i + 1; j < physicsObjects.size(); j++) {
                 PhysicsObject objectB = physicsObjects.get(j);
-                
                 if (!objectB.isCollidable()) continue;
                 
-                // Check for collision
+                // Check collision layers
+                if (!canCollide(objectA.getCollisionLayer(), objectB.getCollisionLayer())) {
+                    continue;
+                }
+                
+                // Detect collision
                 Collision collision = checkCollision(objectA, objectB);
                 
                 if (collision != null) {
                     hadCollision = true;
                     
-                    // Resolve collision
-                    resolveCollision(collision);
+                    // Resolve collision properly for static objects
+                    resolveCollisionWithStatic(collision);
                     
                     // Notify objects
                     objectA.onCollision(objectB, collision);
@@ -162,49 +202,94 @@ public class PhysicsSystem {
     }
     
     /**
-     * Performs additional ground detection for more accurate results
+     * Separate ground detection that doesn't interfere with collision resolution
      */
-    private void performGroundDetection() {
+    private void detectGroundState() {
         for (PhysicsObject object : physicsObjects) {
             if (!object.isCollidable() || object.getMass() <= 0) continue;
             
-            // Check if object is near ground
+            // Reset ground state - it will be set by collision if on ground
+            object.setOnGround(false);
+            
+            // Get object bounds
             AABB bounds = object.getCollisionShape().getBoundingBox();
+            Vector2D velocity = object.getVelocity();
             
-            // Create ground detection probes below the object
-            float probeY = bounds.getBottom() + (float)groundDetectionTolerance;
+            // Only check for ground if moving downward or stationary
+            if (velocity.getY() < -0.1) {
+                continue; // Moving upward, can't be on ground
+            }
             
-            // Check multiple points along the bottom
-            AABB leftProbe = new AABB(bounds.getLeft() + 2, probeY, 2, 2);
-            AABB centerProbe = new AABB((float)object.getPosition().getX(), probeY, 2, 2);
-            AABB rightProbe = new AABB(bounds.getRight() - 2, probeY, 2, 2);
+            // Create ground detection rays
+            float rayLength = (float)groundRayDistance;
+            Vector2D[] rayStarts = {
+                new Vector2D(bounds.getLeft() + 2, bounds.getBottom()),
+                new Vector2D(object.getPosition().getX(), bounds.getBottom()),
+                new Vector2D(bounds.getRight() - 2, bounds.getBottom())
+            };
             
-            // Check probes against other objects
-            for (PhysicsObject other : physicsObjects) {
-                if (other == object || !other.isCollidable()) continue;
+            // Check each ray
+            for (Vector2D rayStart : rayStarts) {
+                Vector2D rayEnd = new Vector2D(rayStart.getX(), rayStart.getY() + rayLength);
                 
-                AABB otherBounds = other.getCollisionShape().getBoundingBox();
-                
-                // Check if any probe intersects with ground
-                if (leftProbe.intersects(otherBounds) || 
-                    centerProbe.intersects(otherBounds) || 
-                    rightProbe.intersects(otherBounds)) {
+                // Check against ground and platform layers
+                for (PhysicsObject other : physicsObjects) {
+                    if (other == object || !other.isCollidable()) continue;
                     
-                    // Create a special ground collision
-                    Vector2D normal = new Vector2D(0, -1);
-                    float penetration = (float)(probeY - otherBounds.getTop());
-                    Vector2D contactPoint = new Vector2D(object.getPosition().getX(), otherBounds.getTop());
+                    // Only check static objects for ground detection
+                    if (other.getMass() > 0) continue;
                     
-                    Collision groundCollision = new Collision(object, other, normal, penetration, contactPoint);
-                    object.onCollision(other, groundCollision);
-                    break;
+                    // Check if object is in ground/platform layer
+                    if (other.getCollisionLayer() != collisionLayers.get("ground") && 
+                        other.getCollisionLayer() != collisionLayers.get("platform")) {
+                        continue;
+                    }
+                    
+                    AABB otherBounds = other.getCollisionShape().getBoundingBox();
+                    
+                    // Simple ray intersection check
+                    if (rayStart.getX() >= otherBounds.getLeft() && 
+                        rayStart.getX() <= otherBounds.getRight() &&
+                        rayStart.getY() <= otherBounds.getTop() &&
+                        rayEnd.getY() >= otherBounds.getTop()) {
+                        
+                        object.setOnGround(true);
+                        break;
+                    }
                 }
+                
+                if (object.isOnGround()) break;
             }
         }
     }
     
     /**
-     * Checks for collision between two objects
+     * Apply friction when on ground
+     */
+    private void applyGroundFriction(float dt) {
+        for (PhysicsObject object : physicsObjects) {
+            if (!object.isOnGround() || object.getMass() <= 0) continue;
+            
+            Vector2D velocity = object.getVelocity();
+            double friction = object.getFriction();
+            
+            // Apply horizontal friction
+            double frictionForce = friction * 1500.0 * dt;
+            double horizontalVel = velocity.getX();
+            
+            if (Math.abs(horizontalVel) < frictionForce) {
+                velocity.setX(0); // Stop completely
+            } else {
+                double sign = horizontalVel > 0 ? 1 : -1;
+                velocity.setX(horizontalVel - sign * frictionForce);
+            }
+            
+            object.setVelocity(velocity);
+        }
+    }
+    
+    /**
+     * Enhanced collision detection
      */
     private Collision checkCollision(PhysicsObject objectA, PhysicsObject objectB) {
         CollisionShape shapeA = objectA.getCollisionShape();
@@ -214,132 +299,255 @@ public class PhysicsSystem {
             return null;
         }
         
-        // Handle AABB-AABB collisions
         if (shapeA instanceof AABB && shapeB instanceof AABB) {
-            AABB aabbA = (AABB) shapeA;
-            AABB aabbB = (AABB) shapeB;
-            
-            // Calculate collision normal and penetration
-            Vector2D posA = objectA.getPosition();
-            Vector2D posB = objectB.getPosition();
-            
-            Vector2D direction = posB.minus(posA);
-            
-            float xOverlap = (float) ((aabbA.getWidth() + aabbB.getWidth()) / 2 - Math.abs(direction.getX()));
-            float yOverlap = (float) ((aabbA.getHeight() + aabbB.getHeight()) / 2 - Math.abs(direction.getY()));
-            
-            Vector2D normal;
-            float penetration;
-            
-            // Determine collision normal by checking which overlap is smaller
-            if (xOverlap < yOverlap) {
-                // X-axis collision
-                normal = new Vector2D(direction.getX() < 0 ? -1 : 1, 0);
-                penetration = xOverlap;
-            } else {
-                // Y-axis collision
-                normal = new Vector2D(0, direction.getY() < 0 ? -1 : 1);
-                penetration = yOverlap;
-            }
-            
-            // Calculate contact point
-            Vector2D contactPoint = new Vector2D(
-                posA.getX() + normal.getX() * (aabbA.getWidth() / 2),
-                posA.getY() + normal.getY() * (aabbA.getHeight() / 2)
-            );
-            
-            return new Collision(objectA, objectB, normal, penetration, contactPoint);
+            return calculateAABBCollision((AABB)shapeA, (AABB)shapeB, objectA, objectB);
         }
         
         // Default collision
-        Vector2D normal = objectB.getPosition().minus(objectA.getPosition()).normalized();
-        
-        return new Collision(
-            objectA, 
-            objectB, 
-            normal, 
-            0.1f,
-            objectA.getPosition().plus(normal.times(0.5))
-        );
+        return createDefaultCollision(objectA, objectB);
     }
     
     /**
-     * Resolves a collision between two objects
+     * Calculate AABB collision details
      */
-    private void resolveCollision(Collision collision) {
+    private Collision calculateAABBCollision(AABB aabbA, AABB aabbB, 
+                                           PhysicsObject objectA, PhysicsObject objectB) {
+        // Calculate overlap
+        float overlapX = Math.min(aabbA.getRight(), aabbB.getRight()) - 
+                        Math.max(aabbA.getLeft(), aabbB.getLeft());
+        float overlapY = Math.min(aabbA.getBottom(), aabbB.getBottom()) - 
+                        Math.max(aabbA.getTop(), aabbB.getTop());
+        
+        // Determine collision normal and penetration
+        Vector2D normal;
+        float penetration;
+        
+        if (overlapX < overlapY) {
+            // Horizontal collision
+            normal = new Vector2D(objectA.getPosition().getX() < objectB.getPosition().getX() ? -1 : 1, 0);
+            penetration = overlapX;
+        } else {
+            // Vertical collision
+            normal = new Vector2D(0, objectA.getPosition().getY() < objectB.getPosition().getY() ? -1 : 1);
+            penetration = overlapY;
+        }
+        
+        // Calculate contact point
+        Vector2D contactPoint = new Vector2D(
+            (Math.max(aabbA.getLeft(), aabbB.getLeft()) + Math.min(aabbA.getRight(), aabbB.getRight())) / 2,
+            (Math.max(aabbA.getTop(), aabbB.getTop()) + Math.min(aabbA.getBottom(), aabbB.getBottom())) / 2
+        );
+        
+        return new Collision(objectA, objectB, normal, penetration, contactPoint);
+    }
+    
+    /**
+     * Create a default collision for non-AABB shapes
+     */
+    private Collision createDefaultCollision(PhysicsObject objectA, PhysicsObject objectB) {
+        Vector2D direction = objectB.getPosition().minus(objectA.getPosition());
+        
+        if (direction.lengthSquared() < 0.001) {
+            direction = new Vector2D(1, 0);
+        } else {
+            direction.normalize();
+        }
+        
+        return new Collision(objectA, objectB, direction, 1.0f, 
+                           objectA.getPosition().plus(direction.times(0.5)));
+    }
+    
+    /**
+     * Properly resolve collision with static objects
+     */
+    private void resolveCollisionWithStatic(Collision collision) {
         PhysicsObject objectA = collision.getObjectA();
         PhysicsObject objectB = collision.getObjectB();
         
         Vector2D normal = collision.getNormal();
         float penetration = collision.getPenetration();
         
+        if (penetration < minimumPenetration) return;
+        
+        // Determine which object is static
+        boolean objectAStatic = objectA.getMass() <= 0;
+        boolean objectBStatic = objectB.getMass() <= 0;
+        
+        // If both are static, don't resolve
+        if (objectAStatic && objectBStatic) return;
+        
+        // If one is static, move only the dynamic object
+        if (objectAStatic && !objectBStatic) {
+            // A is static, move B away
+            Vector2D correction = normal.times(-penetration);
+            objectB.getPosition().add(correction);
+            
+            // Update velocity to prevent sinking
+            Vector2D velB = objectB.getVelocity();
+            double velAlongNormal = velB.dot(normal);
+            if (velAlongNormal < 0) {
+                velB.subtract(normal.times(velAlongNormal));
+                // Apply restitution
+                float restitution = Math.min(objectA.getRestitution(), objectB.getRestitution());
+                velB.subtract(normal.times(velAlongNormal * restitution));
+                objectB.setVelocity(velB);
+            }
+            
+            // Set ground state for vertical collision
+            if (normal.getY() < -0.5) {
+                objectB.setOnGround(true);
+            }
+        } else if (!objectAStatic && objectBStatic) {
+            // B is static, move A away
+            Vector2D correction = normal.times(penetration);
+            objectA.getPosition().subtract(correction);
+            
+            // Update velocity to prevent sinking
+            Vector2D velA = objectA.getVelocity();
+            double velAlongNormal = velA.dot(normal);
+            if (velAlongNormal > 0) {
+                velA.subtract(normal.times(velAlongNormal));
+                // Apply restitution
+                float restitution = Math.min(objectA.getRestitution(), objectB.getRestitution());
+                velA.add(normal.times(velAlongNormal * restitution));
+                objectA.setVelocity(velA);
+            }
+            
+            // Set ground state for vertical collision
+            if (normal.getY() > 0.5) {
+                objectA.setOnGround(true);
+            }
+        } else {
+            // Both are dynamic, use standard resolution
+            resolveDynamicCollision(collision);
+        }
+    }
+    
+    /**
+     * Resolve collision between two dynamic objects
+     */
+    private void resolveDynamicCollision(Collision collision) {
+        PhysicsObject objectA = collision.getObjectA();
+        PhysicsObject objectB = collision.getObjectB();
+        
+        Vector2D normal = collision.getNormal();
+        float penetration = collision.getPenetration();
+        
+        // Calculate inverse masses
         float massA = objectA.getMass();
         float massB = objectB.getMass();
+        float invMassA = massA > 0 ? 1.0f / massA : 0.0f;
+        float invMassB = massB > 0 ? 1.0f / massB : 0.0f;
+        float totalInvMass = invMassA + invMassB;
         
-        // Handle static objects
-        if (massA <= 0 && massB <= 0) {
-            return;
-        }
+        if (totalInvMass <= 0) return;
         
-        float totalMass;
-        if (massA <= 0) {
-            totalMass = massB;
-        } else if (massB <= 0) {
-            totalMass = massA;
-        } else {
-            totalMass = massA + massB;
-        }
-        
-        // Calculate position correction
-        float percent = 0.8f;
-        float slop = 0.01f;
-        
+        // Position correction
         Vector2D correction = normal.times(
-            Math.max(penetration - slop, 0) * percent / totalMass
+            Math.max(penetration - slop, 0) * positionCorrectionPercent / totalInvMass
         );
         
-        // Apply position correction
-        Vector2D posA = objectA.getPosition();
-        Vector2D posB = objectB.getPosition();
-        
         if (massA > 0) {
-            posA.subtract(correction.times(massB > 0 ? massB : 1));
+            objectA.getPosition().subtract(correction.times(invMassA));
         }
-        
         if (massB > 0) {
-            posB.add(correction.times(massA > 0 ? massA : 1));
+            objectB.getPosition().add(correction.times(invMassB));
         }
         
-        // Calculate velocity collision response
+        // Velocity resolution
         Vector2D velA = objectA.getVelocity();
         Vector2D velB = objectB.getVelocity();
-        
         Vector2D relativeVelocity = velB.minus(velA);
         float velocityAlongNormal = (float) relativeVelocity.dot(normal);
         
-        // Objects moving away from each other
-        if (velocityAlongNormal > 0) {
-            return;
-        }
+        // Don't resolve if velocities are separating
+        if (velocityAlongNormal > 0) return;
         
         // Calculate restitution
-        float restitution = 0.1f;
+        float e = Math.min(objectA.getRestitution(), objectB.getRestitution());
         
         // Calculate impulse
-        float impulseScalar = -(1 + restitution) * velocityAlongNormal;
-        impulseScalar /= totalMass;
+        float j = -(1 + e) * velocityAlongNormal;
+        j /= totalInvMass;
+        
+        Vector2D impulse = normal.times(j);
         
         // Apply impulse
-        Vector2D impulse = normal.times(impulseScalar);
-        
         if (massA > 0) {
-            velA.subtract(impulse.times(massB > 0 ? massB : 1));
+            velA.subtract(impulse.times(invMassA));
             objectA.setVelocity(velA);
         }
-        
         if (massB > 0) {
-            velB.add(impulse.times(massA > 0 ? massA : 1));
+            velB.add(impulse.times(invMassB));
             objectB.setVelocity(velB);
+        }
+    }
+    
+    /**
+     * Check if two collision layers can collide
+     */
+    private boolean canCollide(int layerA, int layerB) {
+        List<Integer> validCollisions = collisionMatrix.get(layerA);
+        if (validCollisions == null) {
+            // If layer is not defined, check the opposite direction
+            validCollisions = collisionMatrix.get(layerB);
+            return validCollisions != null && validCollisions.contains(layerA);
+        }
+        return validCollisions.contains(layerB);
+    }
+    
+    /**
+     * Constrain objects to world boundaries
+     */
+    private void constrainToWorldBounds() {
+        for (PhysicsObject object : physicsObjects) {
+            if (object.getMass() <= 0) continue;
+            
+            AABB bounds = object.getCollisionShape().getBoundingBox();
+            Vector2D position = object.getPosition();
+            Vector2D velocity = object.getVelocity();
+            boolean hitBoundary = false;
+            
+            // Left boundary
+            if (bounds.getLeft() < 0) {
+                position.setX(bounds.getWidth() / 2);
+                if (velocity.getX() < 0) {
+                    velocity.setX(-velocity.getX() * object.getRestitution());
+                    hitBoundary = true;
+                }
+            }
+            
+            // Right boundary
+            if (bounds.getRight() > worldWidth) {
+                position.setX(worldWidth - bounds.getWidth() / 2);
+                if (velocity.getX() > 0) {
+                    velocity.setX(-velocity.getX() * object.getRestitution());
+                    hitBoundary = true;
+                }
+            }
+            
+            // Top boundary
+            if (bounds.getTop() < 0) {
+                position.setY(bounds.getHeight() / 2);
+                if (velocity.getY() < 0) {
+                    velocity.setY(-velocity.getY() * object.getRestitution());
+                    hitBoundary = true;
+                }
+            }
+            
+            // Bottom boundary
+            if (bounds.getBottom() > worldHeight) {
+                position.setY(worldHeight - bounds.getHeight() / 2);
+                if (velocity.getY() > 0) {
+                    velocity.setY(-velocity.getY() * object.getRestitution());
+                    hitBoundary = true;
+                    object.setOnGround(true);
+                }
+            }
+            
+            if (hitBoundary) {
+                object.setVelocity(velocity);
+            }
         }
     }
     
