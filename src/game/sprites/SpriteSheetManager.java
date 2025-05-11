@@ -9,117 +9,264 @@ import java.util.Map;
 import game.resource.ResourceManager;
 
 /**
- * Simple SpriteSheetManager using your original sprite definition
+ * Fixed sprite sheet manager with proper configuration
  */
 public class SpriteSheetManager {
     private final Map<String, BufferedImage> spriteSheets;
     private final Map<String, Sprite> sprites;
+    private final Map<String, SpriteConfig> configurations;
     
-    // Correct path based on user's structure
     private static final String SPRITE_PATH = "JoannaD'ArcIII_v1.9.2/Sprites/";
     
     public SpriteSheetManager() {
         this.spriteSheets = new HashMap<>();
         this.sprites = new HashMap<>();
+        this.configurations = new HashMap<>();
+        
+        // Initialize sprite configurations
+        setupSpriteConfigurations();
     }
     
     /**
-     * Loads a sprite sheet from resources
+     * Setup all sprite configurations
      */
-    public BufferedImage loadSpriteSheet(String name, String fileName) {
+    private void setupSpriteConfigurations() {
+        // Main player sprite sheet (fixed frame counts)
+        SpriteConfig playerConfig = new SpriteConfig("player", "JoannaD'ArcIII-Sheet#1.png", 
+                                                    new Dimension(98, 66), 3.0);
+        
+        // Add animations with corrected frame counts (based on actual spritesheet)
+        playerConfig.addAnimation("idle", 0, 6, 1000, true);
+        playerConfig.addAnimation("walk", 37, 23, 800, true);
+        playerConfig.addAnimation("run_start", 74, 6, 300, false);
+        playerConfig.addAnimation("run", 80, 4, 400, true);
+        playerConfig.addAnimation("run_stop", 95, 6, 300, false);
+        playerConfig.addAnimation("jump", 111, 6, 500, false);
+        playerConfig.addAnimation("fall", 117, 4, 600, true);
+        playerConfig.addAnimation("land_quick", 122, 2, 150, false);
+        playerConfig.addAnimation("land_full", 122, 4, 400, false);
+        playerConfig.addAnimation("roll", 222, 8, 400, false);
+        playerConfig.addAnimation("dash", 259, 6, 250, false);
+        playerConfig.addAnimation("block", 296, 3, 300, true); // Fixed frame count
+        playerConfig.addAnimation("hurt", 330, 3, 500, false); // Fixed frame position and count
+        // Removed death animation as it seems to exceed bounds
+        
+        // Register player configuration
+        registerConfiguration(playerConfig);
+        
+        // Don't try to load attack sprites for now since the path is incorrect
+        // You can add them later when you have the correct path
+    }
+    
+    /**
+     * Register a sprite configuration and load sprites
+     */
+    private void registerConfiguration(SpriteConfig config) {
+        configurations.put(config.getName(), config);
+        
+        // Load the sprite sheet
+        if (!loadSpriteSheet(config.getName(), config.getFileName())) {
+            System.err.println("Failed to load sprite sheet: " + config.getFileName());
+            return;
+        }
+        
+        // Create all sprites for this configuration
+        createSpritesFromConfig(config);
+    }
+    
+    /**
+     * Load a sprite sheet from resources
+     */
+    public boolean loadSpriteSheet(String name, String fileName) {
         try {
             BufferedImage spriteSheet = ResourceManager.getInstance().loadImage(SPRITE_PATH + fileName);
-            spriteSheets.put(name, spriteSheet);
-            System.out.println("Loaded sprite sheet: " + name);
-            return spriteSheet;
+            if (spriteSheet != null) {
+                spriteSheets.put(name, spriteSheet);
+                System.out.println("Loaded sprite sheet: " + name + " (" + spriteSheet.getWidth() + "x" + spriteSheet.getHeight() + ")");
+                return true;
+            }
         } catch (Exception e) {
             System.err.println("Failed to load sprite sheet: " + fileName);
             e.printStackTrace();
-            return null;
         }
+        return false;
     }
     
     /**
-     * Creates a sprite from a loaded sprite sheet
+     * Create sprites from a configuration with proper bounds checking
      */
-    public Sprite createSprite(String spriteName, String spriteSheetName, 
-                              Dimension frameSize, double scale, 
-                              int firstFrame, int totalFrames, Duration duration) {
-        BufferedImage spriteSheet = spriteSheets.get(spriteSheetName);
-        if (spriteSheet == null) {
-            System.err.println("Sprite sheet not loaded: " + spriteSheetName);
-            return null;
-        }
+    private void createSpritesFromConfig(SpriteConfig config) {
+        BufferedImage sheet = spriteSheets.get(config.getName());
+        if (sheet == null) return;
         
-        Sprite sprite = new Sprite(spriteName, spriteSheet, frameSize, scale, 
-                                  firstFrame, totalFrames, duration);
-        sprites.put(spriteName, sprite);
-        return sprite;
+        // Calculate maximum frames available
+        int maxColumns = sheet.getWidth() / config.getFrameSize().width;
+        int maxRows = sheet.getHeight() / config.getFrameSize().height;
+        int maxFrames = maxColumns * maxRows;
+        
+        for (Map.Entry<String, AnimationData> entry : config.getAnimations().entrySet()) {
+            String animName = entry.getKey();
+            AnimationData anim = entry.getValue();
+            
+            // Validate frame indices
+            int lastFrame = anim.getFirstFrame() + anim.getFrameCount() - 1;
+            if (lastFrame >= maxFrames) {
+                System.err.println("Warning: Animation '" + animName + "' exceeds sprite sheet bounds!");
+                System.err.println("  Requested: " + (anim.getFirstFrame() + anim.getFrameCount()) + " frames");
+                System.err.println("  Available: " + maxFrames + " frames");
+                
+                // Adjust frame count to fit
+                int adjustedFrameCount = Math.max(1, maxFrames - anim.getFirstFrame());
+                System.err.println("  Adjusted to: " + adjustedFrameCount + " frames");
+                
+                // Create adjusted animation data
+                anim = new AnimationData(
+                    anim.getName(),
+                    anim.getFirstFrame(),
+                    adjustedFrameCount,
+                    anim.getDuration(),
+                    anim.isLooping()
+                );
+            }
+            
+            String spriteName = config.getName() + "_" + animName;
+            
+            // Create the appropriate sprite type based on looping
+            Sprite sprite;
+            if (anim.isLooping()) {
+                sprite = new LoopingSprite(
+                    spriteName,
+                    sheet,
+                    config.getFrameSize(),
+                    config.getScale(),
+                    config.getScale(),
+                    anim.getFirstFrame(),
+                    anim.getFrameCount(),
+                    Duration.ofMillis(anim.getDuration()),
+                    true
+                );
+            } else {
+                sprite = new Sprite(
+                    spriteName,
+                    sheet,
+                    config.getFrameSize(),
+                    config.getScale(),
+                    anim.getFirstFrame(),
+                    anim.getFrameCount(),
+                    Duration.ofMillis(anim.getDuration())
+                );
+            }
+            
+            sprites.put(spriteName, sprite);
+            System.out.println("Created sprite: " + spriteName);
+        }
     }
     
     /**
-     * Gets a sprite by name
+     * Get a sprite by name
      */
     public Sprite getSprite(String name) {
         return sprites.get(name);
     }
     
     /**
-     * Creates all sprites for the player entity using your exact definition
+     * Get all sprites from a specific configuration
      */
-    public void createPlayerSprites() {
-        // Load the comprehensive spritesheet
-        loadSpriteSheet("player", "JoannaD'ArcIII-Sheet#1.png");
+    public Map<String, Sprite> getSpritesForConfig(String configName) {
+        Map<String, Sprite> configSprites = new HashMap<>();
+        String prefix = configName + "_";
         
-        // Define frame size and scale
-        Dimension frameSize = new Dimension(98, 66);
-        double scale = 3.0;
+        for (Map.Entry<String, Sprite> entry : sprites.entrySet()) {
+            if (entry.getKey().startsWith(prefix)) {
+                configSprites.put(entry.getKey().substring(prefix.length()), entry.getValue());
+            }
+        }
         
-        // Create animations (exact frame positions from your definition)
-        createSprite("player_idle", "player", frameSize, scale, 
-                    0, 7, Duration.ofSeconds(1));
-        
-        createSprite("player_walk", "player", frameSize, scale,
-                    37, 23, Duration.ofMillis(800));
-        
-        createSprite("player_run_start", "player", frameSize, scale, 
-                    74, 6, Duration.ofMillis(300));
-        
-        createSprite("player_run", "player", frameSize, scale, 
-                    80, 4, Duration.ofMillis(400));
-        
-        createSprite("player_jump", "player", frameSize, scale, 
-                    111, 6, Duration.ofMillis(500));
-        
-        createSprite("player_fall", "player", frameSize, scale, 
-                    117, 4, Duration.ofMillis(600));
-        
-        createSprite("player_land_quick", "player", frameSize, scale, 
-                    122, 2, Duration.ofMillis(150));
-        
-        createSprite("player_land_full", "player", frameSize, scale, 
-                    122, 4, Duration.ofMillis(400));
-        
-        // Add more animations based on your rows
-        // Row 5: Jump while running with rolling landing
-        // Row 6: Rolling
-        createSprite("player_roll", "player", frameSize, scale, 
-                    6*37, 8, Duration.ofMillis(400));
-        
-        // Row 7: Dashing
-        createSprite("player_dash", "player", frameSize, scale, 
-                    7*37, 6, Duration.ofMillis(250));
-        
-        // Row 8: Blocking
-        createSprite("player_block", "player", frameSize, scale, 
-                    8*37, 5, Duration.ofMillis(300));
+        return configSprites;
     }
     
     /**
-     * Clears all cached sprites
+     * Create all player sprites (for backwards compatibility)
+     */
+    public void createPlayerSprites() {
+        // Sprites are automatically created when configurations are registered
+        // This method is kept for backwards compatibility
+    }
+    
+    /**
+     * Clear all caches
      */
     public void clearCache() {
         sprites.clear();
         spriteSheets.clear();
+        configurations.clear();
     }
+    
+    /**
+     * Get all available sprite names
+     */
+    public String[] getAvailableSprites() {
+        return sprites.keySet().toArray(new String[0]);
+    }
+}
+
+/**
+ * Configuration class for a sprite sheet
+ */
+class SpriteConfig {
+    private final String name;
+    private final String fileName;
+    private final Dimension frameSize;
+    private final double scale;
+    private final Map<String, AnimationData> animations;
+    
+    public SpriteConfig(String name, String fileName, Dimension frameSize, double scale) {
+        this.name = name;
+        this.fileName = fileName;
+        this.frameSize = frameSize;
+        this.scale = scale;
+        this.animations = new HashMap<>();
+    }
+    
+    /**
+     * Add an animation to this configuration
+     */
+    public SpriteConfig addAnimation(String name, int firstFrame, int frameCount, 
+                                   long duration, boolean looping) {
+        animations.put(name, new AnimationData(name, firstFrame, frameCount, duration, looping));
+        return this; // For method chaining
+    }
+    
+    // Getters
+    public String getName() { return name; }
+    public String getFileName() { return fileName; }
+    public Dimension getFrameSize() { return frameSize; }
+    public double getScale() { return scale; }
+    public Map<String, AnimationData> getAnimations() { return animations; }
+}
+
+/**
+ * Data class for animation configuration
+ */
+class AnimationData {
+    private final String name;
+    private final int firstFrame;
+    private final int frameCount;
+    private final long duration;
+    private final boolean looping;
+    
+    public AnimationData(String name, int firstFrame, int frameCount, long duration, boolean looping) {
+        this.name = name;
+        this.firstFrame = firstFrame;
+        this.frameCount = frameCount;
+        this.duration = duration;
+        this.looping = looping;
+    }
+    
+    // Getters
+    public String getName() { return name; }
+    public int getFirstFrame() { return firstFrame; }
+    public int getFrameCount() { return frameCount; }
+    public long getDuration() { return duration; }
+    public boolean isLooping() { return looping; }
 }

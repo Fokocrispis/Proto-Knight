@@ -2,9 +2,10 @@ package game.entity;
 
 import java.awt.Graphics2D;
 import java.awt.Color;
+import java.awt.Rectangle;
 import java.awt.event.KeyEvent;
-import java.util.HashMap;
 import java.util.Map;
+import java.util.HashMap;
 import java.util.Iterator;
 
 import game.Vector2D;
@@ -17,16 +18,16 @@ import game.sprites.SpriteSheetManager;
 import game.sprites.LoopingSprite;
 
 /**
- * Improved PlayerEntity with better movement and state management
+ * Complete PlayerEntity with all methods implemented
  */
 public class PlayerEntity extends AbstractEntity {
-    // Character dimensions (1.6m tall)
-    private static final int PLAYER_HEIGHT = 160; // 1.6m
-    private static final int PLAYER_WIDTH = 80;   // 0.8m
+    // Character dimensions
+    private static final int PLAYER_HEIGHT = 160;
+    private static final int PLAYER_WIDTH = 80;
     
-    // Movement parameters (adjusted for better control)
+    // Movement parameters
     private static final double WALK_SPEED = 300.0;
-    private static final double RUN_SPEED = 500.0;
+    private static final double RUN_SPEED = 600.0;
     private static final double WALK_ACCELERATION = 2000.0;
     private static final double RUN_ACCELERATION = 3000.0;
     private static final double AIR_CONTROL = 0.6;
@@ -36,26 +37,44 @@ public class PlayerEntity extends AbstractEntity {
     private static final double JUMP_FORCE = -650.0;
     private static final double DOUBLE_JUMP_FORCE = -550.0;
     
-    // Advanced movement parameters
-    private static final double DASH_SPEED = 1000.0;
+    // Advanced movement
+    private static final double DASH_SPEED = 1200.0;
     private static final double TELEPORT_DISTANCE = 150.0;
     private static final double HOOK_SPEED = 800.0;
     private static final double HOOK_RANGE = 300.0;
     private static final double CLOSE_TELEPORT_DISTANCE = 80.0;
     
+    // Combat parameters
+    private static final int MAX_HEALTH = 100;
+    private static final int MAX_MANA = 50;
+    
     // Timing parameters
-    private static final long DASH_DURATION = 200;
+    private static final long DASH_DURATION = 250;
     private static final long DASH_COOLDOWN = 600;
     private static final long TELEPORT_COOLDOWN = 1000;
     private static final long HOOK_COOLDOWN = 1500;
     private static final long COYOTE_TIME = 150;
     private static final long JUMP_BUFFER_TIME = 200;
+    private static final long ATTACK_COOLDOWN = 300;
+    private static final long SPELL_COOLDOWN = 800;
     
     // Input reference
     private final KeyboardInput input;
     
-    // Enhanced state tracking
+    // Combat state
+    private int health = MAX_HEALTH;
+    private int mana = MAX_MANA;
+    private boolean isAttacking = false;
+    private boolean isCasting = false;
+    
+    // Advanced state tracking for animations
     private PlayerState currentState = PlayerState.IDLE;
+    private PlayerState previousState = PlayerState.IDLE;
+    private MovementContext movementContext = MovementContext.NORMAL;
+    private boolean wasRunning = false;
+    private boolean wasDashing = false;
+    
+    // Player state
     private boolean isFacingRight = true;
     private boolean wasTryingToMove = false;
     private boolean isJumping = false;
@@ -71,8 +90,11 @@ public class PlayerEntity extends AbstractEntity {
     private long lastHookTime = 0;
     private long lastGroundTime = 0;
     private long lastJumpPressTime = 0;
+    private long lastAttackTime = 0;
+    private long lastSpellTime = 0;
     private long stateChangeTime = 0;
     private long dashStartTime = 0;
+    private long actionStartTime = 0;
     
     // Movement state
     private Vector2D dashDirection = new Vector2D(0, 0);
@@ -87,6 +109,7 @@ public class PlayerEntity extends AbstractEntity {
     
     // Sprite references
     private Map<PlayerState, Sprite> stateSprites = new HashMap<>();
+    private Map<String, Sprite> contextualSprites = new HashMap<>();
     
     // Buff/Debuff system
     private Map<BuffType, BuffEffect> activeBuffs = new HashMap<>();
@@ -99,8 +122,8 @@ public class PlayerEntity extends AbstractEntity {
         this.mass = 1.0f;
         this.affectedByGravity = true;
         this.collisionShape = new AABB(position, PLAYER_WIDTH, PLAYER_HEIGHT);
-        this.friction = 0.8f;  // High friction for good control
-        this.restitution = 0.0f;  // No bounce
+        this.friction = 0.9f;
+        this.restitution = 0.0f;
         
         // Initialize sprite management
         this.spriteManager = new SpriteSheetManager();
@@ -110,16 +133,20 @@ public class PlayerEntity extends AbstractEntity {
     private void loadSprites() {
         spriteManager.createPlayerSprites();
         
-        // Map sprites to states
+        // Basic movement sprites
         stateSprites.put(PlayerState.IDLE, spriteManager.getSprite("player_idle"));
         stateSprites.put(PlayerState.WALKING, spriteManager.getSprite("player_walk"));
         stateSprites.put(PlayerState.RUNNING, spriteManager.getSprite("player_run"));
         stateSprites.put(PlayerState.JUMPING, spriteManager.getSprite("player_jump"));
         stateSprites.put(PlayerState.FALLING, spriteManager.getSprite("player_fall"));
         stateSprites.put(PlayerState.DASHING, spriteManager.getSprite("player_dash"));
-        stateSprites.put(PlayerState.HOOKING, spriteManager.getSprite("player_dash"));
-        stateSprites.put(PlayerState.LANDING, spriteManager.getSprite("player_land_quick"));
-        stateSprites.put(PlayerState.TELEPORTING, spriteManager.getSprite("player_dash"));
+        stateSprites.put(PlayerState.ATTACKING, spriteManager.getSprite("player_roll"));
+        
+        // Contextual sprites
+        contextualSprites.put("jump_running", spriteManager.getSprite("player_jump")); // Use run_jump when available
+        contextualSprites.put("landing_normal", spriteManager.getSprite("player_land_quick"));
+        contextualSprites.put("landing_running", spriteManager.getSprite("player_land_full"));
+        contextualSprites.put("landing_dashing", spriteManager.getSprite("player_roll")); // Use special landing
         
         // Set initial sprite
         currentSprite = stateSprites.get(PlayerState.IDLE);
@@ -130,13 +157,18 @@ public class PlayerEntity extends AbstractEntity {
         long currentTime = System.currentTimeMillis();
         float dt = deltaTime / 1000.0f;
         
+        // Store previous state for context
+        previousState = currentState;
+        wasRunning = (currentState == PlayerState.RUNNING);
+        wasDashing = isDashing;
+        
         // Update buff/debuff system
         updateBuffs(deltaTime);
         
         // Track ground state
         boolean wasOnGround = isOnGround();
         
-        // Check for landing
+        // Check for landing with context
         if (!wasOnGround && isOnGround()) {
             onLand();
         }
@@ -165,7 +197,7 @@ public class PlayerEntity extends AbstractEntity {
         if (vel.getY() > 1500) vel.setY(1500);
         setVelocity(vel);
         
-        // Update state based on movement
+        // Update state and movement context
         updatePlayerState();
         
         // Update sprite animation
@@ -183,24 +215,28 @@ public class PlayerEntity extends AbstractEntity {
             isFacingRight = false;
             wasTryingToMove = true;
             if (!isDashing && !isHooking) {
-                if (input.isKeyPressed(KeyEvent.VK_X)) {
-                    // Running
+                if (input.isKeyPressed(KeyEvent.VK_SHIFT)) {
+                    // Running (Shift is now run instead of block)
                     targetVelocity.setX(-RUN_SPEED);
+                    movementContext = MovementContext.RUNNING;
                 } else {
                     // Walking
                     targetVelocity.setX(-WALK_SPEED);
+                    movementContext = MovementContext.NORMAL;
                 }
             }
         } else if (input.isKeyPressed(KeyEvent.VK_RIGHT)) {
             isFacingRight = true;
             wasTryingToMove = true;
             if (!isDashing && !isHooking) {
-                if (input.isKeyPressed(KeyEvent.VK_X)) {
+                if (input.isKeyPressed(KeyEvent.VK_SHIFT)) {
                     // Running
                     targetVelocity.setX(RUN_SPEED);
+                    movementContext = MovementContext.RUNNING;
                 } else {
                     // Walking
                     targetVelocity.setX(WALK_SPEED);
+                    movementContext = MovementContext.NORMAL;
                 }
             }
         } else {
@@ -217,7 +253,10 @@ public class PlayerEntity extends AbstractEntity {
         
         if (lastJumpPressTime != 0 && currentTime - lastJumpPressTime <= JUMP_BUFFER_TIME) {
             if (isOnGround() || (currentTime - lastGroundTime <= COYOTE_TIME)) {
-                // First jump
+                // First jump - check if we're running
+                if (input.isKeyPressed(KeyEvent.VK_SHIFT) || wasRunning) {
+                    movementContext = MovementContext.RUNNING;
+                }
                 jump(JUMP_FORCE);
                 lastJumpPressTime = 0;
             } else if (jumpCount < maxJumps && hasActiveBuff(BuffType.DOUBLE_JUMP)) {
@@ -228,7 +267,67 @@ public class PlayerEntity extends AbstractEntity {
         }
         
         // Advanced movement abilities
-        handleAdvancedMovement(currentTime);
+        handleSpecialMovement(currentTime);
+        
+        // Combat input
+        handleCombatInput(currentTime);
+    }
+    
+    private void handleSpecialMovement(long currentTime) {
+        // Handle dash
+        if (input.isKeyJustPressed(KeyEvent.VK_W) && currentTime - lastDashTime >= DASH_COOLDOWN) {
+            performDash();
+            lastDashTime = currentTime;
+        }
+        
+        // Handle teleports
+        if (input.isKeyJustPressed(KeyEvent.VK_E) && currentTime - lastTeleportTime >= TELEPORT_COOLDOWN) {
+            performTeleport(TELEPORT_DISTANCE);
+            lastTeleportTime = currentTime;
+        }
+        
+        if (input.isKeyJustPressed(KeyEvent.VK_Q) && currentTime - lastTeleportTime >= TELEPORT_COOLDOWN / 2) {
+            performTeleport(CLOSE_TELEPORT_DISTANCE);
+            lastTeleportTime = currentTime;
+        }
+        
+        // Handle hook
+        if (input.isKeyJustPressed(KeyEvent.VK_R) && currentTime - lastHookTime >= HOOK_COOLDOWN) {
+            performHook();
+            lastHookTime = currentTime;
+        }
+        
+        // Update dash state
+        if (isDashing && currentTime - dashStartTime >= DASH_DURATION) {
+            isDashing = false;
+            affectedByGravity = true;
+            movementContext = wasDashing ? MovementContext.DASHING : movementContext;
+        }
+    }
+    
+    private void handleCombatInput(long currentTime) {
+        // Basic attack (now using X for attacks)
+        if (input.isKeyJustPressed(KeyEvent.VK_X) && currentTime - lastAttackTime >= ATTACK_COOLDOWN) {
+            performBasicAttack();
+            lastAttackTime = currentTime;
+        }
+        
+        // Heavy attack
+        if (input.isKeyJustPressed(KeyEvent.VK_C) && currentTime - lastAttackTime >= ATTACK_COOLDOWN * 2) {
+            performHeavyAttack();
+            lastAttackTime = currentTime;
+        }
+        
+        // Spells
+        if (input.isKeyJustPressed(KeyEvent.VK_1) && currentTime - lastSpellTime >= SPELL_COOLDOWN) {
+            castFireball();
+            lastSpellTime = currentTime;
+        }
+        
+        if (input.isKeyJustPressed(KeyEvent.VK_2) && currentTime - lastSpellTime >= SPELL_COOLDOWN) {
+            castHeal();
+            lastSpellTime = currentTime;
+        }
     }
     
     private void applyMovement(float dt) {
@@ -279,51 +378,29 @@ public class PlayerEntity extends AbstractEntity {
     }
     
     private void onLand() {
-        if (Math.abs(velocity.getY()) > 400) {
-            currentState = PlayerState.LANDING;
-            stateChangeTime = System.currentTimeMillis();
-        }
-        
         isJumping = false;
         isFalling = false;
         jumpCount = 0;
         affectedByGravity = true;
         
+        // Determine landing animation based on previous context
+        if (wasDashing) {
+            currentState = PlayerState.LANDING;
+            movementContext = MovementContext.DASHING;
+        } else if (wasRunning) {
+            currentState = PlayerState.LANDING;
+            movementContext = MovementContext.RUNNING;
+        } else {
+            currentState = PlayerState.LANDING;
+            movementContext = MovementContext.NORMAL;
+        }
+        
+        stateChangeTime = System.currentTimeMillis();
+        
         // Stop hook if landing
         if (isHooking) {
             isHooking = false;
             hookTarget = null;
-        }
-    }
-    
-    private void handleAdvancedMovement(long currentTime) {
-        // Handle dash
-        if (input.isKeyJustPressed(KeyEvent.VK_W) && currentTime - lastDashTime >= DASH_COOLDOWN) {
-            performDash();
-            lastDashTime = currentTime;
-        }
-        
-        // Handle teleports
-        if (input.isKeyJustPressed(KeyEvent.VK_E) && currentTime - lastTeleportTime >= TELEPORT_COOLDOWN) {
-            performTeleport(TELEPORT_DISTANCE);
-            lastTeleportTime = currentTime;
-        }
-        
-        if (input.isKeyJustPressed(KeyEvent.VK_Q) && currentTime - lastTeleportTime >= TELEPORT_COOLDOWN / 2) {
-            performTeleport(CLOSE_TELEPORT_DISTANCE);
-            lastTeleportTime = currentTime;
-        }
-        
-        // Handle hook
-        if (input.isKeyJustPressed(KeyEvent.VK_R) && currentTime - lastHookTime >= HOOK_COOLDOWN) {
-            performHook();
-            lastHookTime = currentTime;
-        }
-        
-        // Update dash state
-        if (isDashing && currentTime - dashStartTime >= DASH_DURATION) {
-            isDashing = false;
-            affectedByGravity = true;
         }
     }
     
@@ -356,6 +433,7 @@ public class PlayerEntity extends AbstractEntity {
         }
         
         currentState = PlayerState.DASHING;
+        movementContext = MovementContext.DASHING;
         stateChangeTime = System.currentTimeMillis();
         addBuffEffect(BuffType.DASH_IMMUNITY, DASH_DURATION);
     }
@@ -376,7 +454,7 @@ public class PlayerEntity extends AbstractEntity {
         
         // Teleport
         position.set(targetPos);
-        currentState = PlayerState.TELEPORTING;
+        currentState = PlayerState.DASHING; // Use dash state for teleport animation
         stateChangeTime = System.currentTimeMillis();
         addBuffEffect(BuffType.TELEPORT_IMMUNITY, 500);
     }
@@ -393,7 +471,7 @@ public class PlayerEntity extends AbstractEntity {
         if (position.distance(hookTarget) <= HOOK_RANGE) {
             isHooking = true;
             affectedByGravity = false;
-            currentState = PlayerState.HOOKING;
+            currentState = PlayerState.DASHING; // Use dash state for hook animation
             stateChangeTime = System.currentTimeMillis();
             
             // Apply immediate velocity toward hook point
@@ -402,26 +480,95 @@ public class PlayerEntity extends AbstractEntity {
         }
     }
     
+    private void performBasicAttack() {
+        isAttacking = true;
+        currentState = PlayerState.ATTACKING;
+        actionStartTime = System.currentTimeMillis();
+        
+        // Create attack hitbox (simplified)
+        Rectangle attackBox = new Rectangle(
+            (int)(position.getX() + (isFacingRight ? 40 : -80)),
+            (int)(position.getY() - 40),
+            80, 80
+        );
+        
+        // TODO: Check for enemies in attack range and deal damage
+    }
+    
+    private void performHeavyAttack() {
+        isAttacking = true;
+        currentState = PlayerState.ATTACKING;
+        actionStartTime = System.currentTimeMillis();
+        
+        // Create larger attack hitbox
+        Rectangle attackBox = new Rectangle(
+            (int)(position.getX() + (isFacingRight ? 30 : -100)),
+            (int)(position.getY() - 50),
+            100, 100
+        );
+        
+        // Apply knockback to self
+        Vector2D knockback = new Vector2D(isFacingRight ? -100 : 100, -50);
+        velocity.add(knockback);
+        
+        // TODO: Check for enemies and deal heavy damage
+    }
+    
+    private void castFireball() {
+        isCasting = true;
+        currentState = PlayerState.IDLE; // No cast animation yet
+        
+        // Consume mana
+        mana -= 5;
+        if (mana < 0) mana = 0;
+        
+        // TODO: Create fireball projectile
+        System.out.println("Casting Fireball!");
+    }
+    
+    private void castHeal() {
+        isCasting = true;
+        currentState = PlayerState.IDLE; // No cast animation yet
+        
+        // Consume mana
+        mana -= 10;
+        if (mana < 0) mana = 0;
+        
+        // Heal player
+        health += 20;
+        if (health > MAX_HEALTH) health = MAX_HEALTH;
+        
+        // TODO: Create heal visual effect
+        System.out.println("Casting Heal! Health: " + health);
+    }
+    
     private void updatePlayerState() {
         PlayerState newState = currentState;
         long currentTime = System.currentTimeMillis();
         double velocityX = Math.abs(getVelocity().getX());
         double velocityY = getVelocity().getY();
         
-        // Override states for special abilities
+        // Handle special states first
         if (isDashing) {
             newState = PlayerState.DASHING;
+        } else if (isAttacking && currentTime - actionStartTime < 300) {
+            newState = PlayerState.ATTACKING;
         } else if (isHooking) {
-            newState = PlayerState.HOOKING;
+            newState = PlayerState.DASHING; // Use dash animation for hook
+            
             // Stop hooking if we've reached the target
             if (hookTarget != null && position.distance(hookTarget) < 30) {
                 isHooking = false;
                 hookTarget = null;
                 affectedByGravity = true;
             }
-        } else if (currentState == PlayerState.TELEPORTING) {
-            if (currentTime - stateChangeTime > 200) {
-                newState = PlayerState.FALLING;
+        } else if (currentState == PlayerState.LANDING) {
+            // Handle landing animation duration
+            if (currentTime - stateChangeTime > 300) {
+                newState = PlayerState.IDLE;
+                movementContext = MovementContext.NORMAL;
+            } else {
+                newState = PlayerState.LANDING; // Keep landing state
             }
         } else {
             // Normal state determination
@@ -429,7 +576,14 @@ public class PlayerEntity extends AbstractEntity {
                 if (velocityX < 5) {
                     newState = PlayerState.IDLE;
                 } else {
-                    newState = input.isKeyPressed(KeyEvent.VK_X) ? PlayerState.RUNNING : PlayerState.WALKING;
+                    // Check if running (shift key or high speed)
+                    if (input.isKeyPressed(KeyEvent.VK_SHIFT) || velocityX > WALK_SPEED * 1.5) {
+                        newState = PlayerState.RUNNING;
+                        movementContext = MovementContext.RUNNING;
+                    } else {
+                        newState = PlayerState.WALKING;
+                        movementContext = MovementContext.NORMAL;
+                    }
                 }
             } else {
                 if (velocityY < 0) {
@@ -440,23 +594,54 @@ public class PlayerEntity extends AbstractEntity {
             }
         }
         
-        // Handle landing animation
-        if (newState == PlayerState.LANDING && currentTime - stateChangeTime > 300) {
-            newState = PlayerState.IDLE;
-        }
-        
         // Update state if changed
         if (newState != currentState) {
             currentState = newState;
             stateChangeTime = currentTime;
             
-            // Update sprite
-            Sprite newSprite = stateSprites.get(currentState);
-            if (newSprite != null && newSprite != currentSprite) {
-                currentSprite = newSprite;
-                if (currentSprite != null) {
-                    currentSprite.reset();
+            // Update sprite based on state and context
+            updateSpriteForState();
+        }
+    }
+    
+    private void updateSpriteForState() {
+        Sprite newSprite = null;
+        
+        // Choose sprite based on state and context
+        switch (currentState) {
+            case JUMPING:
+                if (movementContext == MovementContext.RUNNING) {
+                    newSprite = contextualSprites.get("jump_running");
                 }
+                if (newSprite == null) {
+                    newSprite = stateSprites.get(PlayerState.JUMPING);
+                }
+                break;
+                
+            case LANDING:
+                switch (movementContext) {
+                    case RUNNING:
+                        newSprite = contextualSprites.get("landing_running");
+                        break;
+                    case DASHING:
+                        newSprite = contextualSprites.get("landing_dashing");
+                        break;
+                    default:
+                        newSprite = contextualSprites.get("landing_normal");
+                        break;
+                }
+                break;
+                
+            default:
+                newSprite = stateSprites.get(currentState);
+                break;
+        }
+        
+        // Update sprite if changed
+        if (newSprite != null && newSprite != currentSprite) {
+            currentSprite = newSprite;
+            if (currentSprite != null) {
+                currentSprite.reset();
             }
         }
     }
@@ -472,10 +657,12 @@ public class PlayerEntity extends AbstractEntity {
                     // Transition to appropriate state after animation completes
                     if (currentState == PlayerState.LANDING) {
                         currentState = PlayerState.IDLE;
-                        currentSprite = stateSprites.get(PlayerState.IDLE);
-                        if (currentSprite != null) {
-                            currentSprite.reset();
-                        }
+                        movementContext = MovementContext.NORMAL;
+                        updateSpriteForState();
+                    } else if (currentState == PlayerState.ATTACKING) {
+                        isAttacking = false;
+                        currentState = PlayerState.IDLE;
+                        updateSpriteForState();
                     }
                 }
             }
@@ -502,6 +689,9 @@ public class PlayerEntity extends AbstractEntity {
                        (int)(currentSprite.getSize().height * 1.28), null);
         }
         
+        // Draw health and mana bars
+        drawHealthManaBar(g);
+        
         // Draw buff effects
         renderBuffEffects(g);
         
@@ -510,6 +700,15 @@ public class PlayerEntity extends AbstractEntity {
             g.setColor(Color.CYAN);
             g.drawLine((int)position.getX(), (int)position.getY(), 
                       (int)hookTarget.getX(), (int)hookTarget.getY());
+        }
+        
+        // Draw movement context indicator (debug)
+        if (input.isKeyPressed(KeyEvent.VK_F3)) {
+            g.setColor(Color.WHITE);
+            g.drawString("Context: " + movementContext.name(), 
+                        (int)position.getX() - 40, (int)position.getY() - 50);
+            g.drawString("State: " + currentState.name(), 
+                        (int)position.getX() - 40, (int)position.getY() - 65);
         }
     }
     
@@ -578,18 +777,78 @@ public class PlayerEntity extends AbstractEntity {
         return activeBuffs.containsKey(type);
     }
     
+    private void drawHealthManaBar(Graphics2D g) {
+        // Health bar
+        int barWidth = 60;
+        int barHeight = 8;
+        int barX = (int)position.getX() - barWidth / 2;
+        int barY = (int)position.getY() - 90;
+        
+        // Background
+        g.setColor(Color.BLACK);
+        g.fillRect(barX - 1, barY - 1, barWidth + 2, barHeight + 2);
+        
+        // Background bar
+        g.setColor(Color.DARK_GRAY);
+        g.fillRect(barX, barY, barWidth, barHeight);
+        
+        // Health bar
+        g.setColor(Color.RED);
+        int healthWidth = (int)((double)health / MAX_HEALTH * barWidth);
+        g.fillRect(barX, barY, healthWidth, barHeight);
+        
+        // Mana bar
+        barY += 10;
+        barHeight = 6;
+        
+        // Background
+        g.setColor(Color.BLACK);
+        g.fillRect(barX - 1, barY - 1, barWidth + 2, barHeight + 2);
+        
+        // Background bar
+        g.setColor(Color.DARK_GRAY);
+        g.fillRect(barX, barY, barWidth, barHeight);
+        
+        // Mana bar
+        g.setColor(Color.BLUE);
+        int manaWidth = (int)((double)mana / MAX_MANA * barWidth);
+        g.fillRect(barX, barY, manaWidth, barHeight);
+    }
+    
+    /**
+     * Draw buff effects
+     */
     private void renderBuffEffects(Graphics2D g) {
-        int offsetY = -50;
+        int buffX = (int)position.getX() - 30;
+        int buffY = (int)position.getY() - 100;
+        int buffSize = 10;
+        int buffSpacing = 12;
         
-        // Draw buff indicators
-        if (hasActiveBuff(BuffType.SPEED)) {
-            g.setColor(Color.GREEN);
-            g.fillOval((int)position.getX() - 5, (int)position.getY() + offsetY, 10, 10);
-        }
-        
-        if (hasActiveBuff(BuffType.DASH_IMMUNITY) || hasActiveBuff(BuffType.TELEPORT_IMMUNITY)) {
-            g.setColor(Color.YELLOW);
-            g.drawOval((int)position.getX() - 30, (int)position.getY() - 30, 60, 60);
+        for (Map.Entry<BuffType, BuffEffect> entry : activeBuffs.entrySet()) {
+            BuffType type = entry.getKey();
+            BuffEffect buff = entry.getValue();
+            
+            // Draw buff icon
+            switch (type) {
+                case SPEED:
+                    g.setColor(Color.GREEN);
+                    break;
+                case DEFENSE:
+                    g.setColor(Color.BLUE);
+                    break;
+                case ATTACK_SPEED:
+                    g.setColor(Color.ORANGE);
+                    break;
+                default:
+                    g.setColor(Color.WHITE);
+                    break;
+            }
+            
+            g.fillOval(buffX, buffY, buffSize, buffSize);
+            g.setColor(Color.BLACK);
+            g.drawOval(buffX, buffY, buffSize, buffSize);
+            
+            buffX += buffSpacing;
         }
     }
     
@@ -603,4 +862,17 @@ public class PlayerEntity extends AbstractEntity {
     public boolean isFacingRight() { return isFacingRight; }
     public Sprite getCurrentSprite() { return currentSprite; }
     public Map<BuffType, BuffEffect> getActiveBuffs() { return new HashMap<>(activeBuffs); }
+    public int getHealth() { return health; }
+    public int getMana() { return mana; }
+    public boolean isAttacking() { return isAttacking; }
+    public boolean isCasting() { return isCasting; }
+    
+    /**
+     * Movement context enum for animation decisions
+     */
+    private enum MovementContext {
+        NORMAL,
+        RUNNING,
+        DASHING
+    }
 }

@@ -13,5 +13,7 @@ public enum PlayerState {
     DASHING,
     HOOKING,
     TELEPORTING,
-    ATTACKING
+    ATTACKING, 
+    BLOCKING, 
+    CASTING
 }

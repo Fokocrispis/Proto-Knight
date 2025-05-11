@@ -5,7 +5,7 @@ import java.awt.image.BufferedImage;
 import java.time.Duration;
 
 /**
- * Updated Sprite class with getters for frame control
+ * Sprite class with division by zero protection
  */
 public class Sprite {
     private final BufferedImage spritesheet;
@@ -31,9 +31,9 @@ public class Sprite {
         this.frameSize = frameSize;
         this.scale = scale;
         this.firstFrame = firstFrame;
-        this.totalFrames = totalFrames;
+        this.totalFrames = Math.max(1, totalFrames); // Ensure at least 1 frame
         this.duration = duration;
-        this.timePerFrame = this.duration.toMillis() / this.totalFrames;
+        this.timePerFrame = Math.max(1, this.duration.toMillis()) / Math.max(1, this.totalFrames);
         
         this.timeElapsed = 0;
         this.frameIndex = 0;
@@ -48,9 +48,14 @@ public class Sprite {
      * Validates that the spritesheet can accommodate all requested frames
      */
     private void validateSpritesheet() {
+        if (spritesheet == null || frameSize.width <= 0 || frameSize.height <= 0) {
+            System.err.println("Warning: Invalid spritesheet or frame size for sprite '" + name + "'");
+            return;
+        }
+        
         int columns = getSpritesheetColumns();
-        int totalFramesInSheet = (spritesheet.getWidth() / frameSize.width) * 
-                                (spritesheet.getHeight() / frameSize.height);
+        int rows = getSpritesheetRows();
+        int totalFramesInSheet = columns * rows;
         
         int lastFrameIndex = firstFrame + totalFrames - 1;
         
@@ -58,8 +63,6 @@ public class Sprite {
             System.err.println("Warning: Sprite '" + name + "' requests frames beyond spritesheet bounds!");
             System.err.println("  Requested: " + (firstFrame + totalFrames) + " frames");
             System.err.println("  Available: " + totalFramesInSheet + " frames");
-            System.err.println("  Spritesheet size: " + spritesheet.getWidth() + "x" + spritesheet.getHeight());
-            System.err.println("  Frame size: " + frameSize.width + "x" + frameSize.height);
         }
     }
     
@@ -118,7 +121,8 @@ public class Sprite {
         // Add error text
         g.setColor(java.awt.Color.BLACK);
         g.setFont(new java.awt.Font("Arial", java.awt.Font.BOLD, 8));
-        g.drawString("ERROR", frameSize.width / 4, frameSize.height / 2);
+        String errorText = "ERROR";
+        g.drawString(errorText, frameSize.width / 4, frameSize.height / 2);
         
         g.dispose();
         return errorFrame;
@@ -216,12 +220,11 @@ public class Sprite {
         int currentFrame = firstFrame + frameIndex;
         
         // Ensure we don't exceed the available frames
-        int totalPossibleFrames = (spritesheet.getWidth() / frameSize.width) * 
-                                 (spritesheet.getHeight() / frameSize.height);
+        int totalPossibleFrames = columns * getSpritesheetRows();
         
         if (currentFrame >= totalPossibleFrames) {
             System.err.println("Frame " + currentFrame + " exceeds available frames (" + totalPossibleFrames + ") for sprite '" + name + "'");
-            currentFrame = totalPossibleFrames - 1; // Use last available frame
+            currentFrame = Math.max(0, totalPossibleFrames - 1); // Use last available frame
         }
         
         int x = (currentFrame % columns) * frameSize.width;
@@ -234,7 +237,16 @@ public class Sprite {
      * Gets the number of columns in the spritesheet
      */
     private int getSpritesheetColumns() {
-        return spritesheet.getWidth() / frameSize.width;
+        if (frameSize.width <= 0) return 1; // Prevent division by zero
+        return Math.max(1, spritesheet.getWidth() / frameSize.width);
+    }
+    
+    /**
+     * Gets the number of rows in the spritesheet
+     */
+    private int getSpritesheetRows() {
+        if (frameSize.height <= 0) return 1; // Prevent division by zero
+        return Math.max(1, spritesheet.getHeight() / frameSize.height);
     }
     
     /**
