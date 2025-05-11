@@ -9,7 +9,7 @@ import java.util.Map;
 import game.resource.ResourceManager;
 
 /**
- * Fixed sprite sheet manager with proper configuration
+ * Updated sprite sheet manager with additional animations for dash, landing, and turning
  */
 public class SpriteSheetManager {
     private final Map<String, BufferedImage> spriteSheets;
@@ -28,34 +28,42 @@ public class SpriteSheetManager {
     }
     
     /**
-     * Setup all sprite configurations
+     * Setup all sprite configurations with improved animation mappings
      */
     private void setupSpriteConfigurations() {
-        // Main player sprite sheet (fixed frame counts)
+        // Main player sprite sheet
         SpriteConfig playerConfig = new SpriteConfig("player", "JoannaD'ArcIII-Sheet#1.png", 
                                                     new Dimension(98, 66), 3.0);
         
-        // Add animations with corrected frame counts (based on actual spritesheet)
+        // Add animations with corrected frame counts
         playerConfig.addAnimation("idle", 0, 6, 1000, true);
-        playerConfig.addAnimation("walk", 37, 23, 800, true);
-        playerConfig.addAnimation("run_start", 74, 6, 300, false);
+        playerConfig.addAnimation("walk", 37, 23, 850, true);
+        playerConfig.addAnimation("run_start", 74, 9, 600, false);
         playerConfig.addAnimation("run", 80, 4, 400, true);
         playerConfig.addAnimation("run_stop", 95, 6, 300, false);
+        playerConfig.addAnimation("run_turning", 84, 7, 550, false); // Reuse run frames for turning
         playerConfig.addAnimation("jump", 111, 6, 500, false);
         playerConfig.addAnimation("fall", 117, 4, 600, true);
         playerConfig.addAnimation("land_quick", 122, 2, 150, false);
         playerConfig.addAnimation("land_full", 122, 4, 400, false);
         playerConfig.addAnimation("roll", 222, 8, 400, false);
         playerConfig.addAnimation("dash", 259, 6, 250, false);
-        playerConfig.addAnimation("block", 296, 3, 300, true); // Fixed frame count
-        playerConfig.addAnimation("hurt", 330, 3, 500, false); // Fixed frame position and count
-        // Removed death animation as it seems to exceed bounds
+        playerConfig.addAnimation("block", 296, 3, 300, true);
+        playerConfig.addAnimation("hurt", 330, 3, 500, false);
+        
+        // If you have separate dash/attack sheets, add them here
+        if (loadSpriteSheet("attacks", "Attacks/JoannaD'ArcIII-Sheet#1.png")) {
+            SpriteConfig attackConfig = new SpriteConfig("attacks", "Attacks/JoannaD'ArcIII-Sheet#1.png",
+                                                        new Dimension(98, 66), 3.0);
+            attackConfig.addAnimation("air_attack", 0, 8, 400, false);
+            attackConfig.addAnimation("combo_1", 8, 6, 350, false);
+            attackConfig.addAnimation("combo_2", 14, 7, 400, false);
+            attackConfig.addAnimation("combo_3", 21, 8, 450, false);
+            registerConfiguration(attackConfig);
+        }
         
         // Register player configuration
         registerConfiguration(playerConfig);
-        
-        // Don't try to load attack sprites for now since the path is incorrect
-        // You can add them later when you have the correct path
     }
     
     /**
@@ -89,6 +97,30 @@ public class SpriteSheetManager {
             System.err.println("Failed to load sprite sheet: " + fileName);
             e.printStackTrace();
         }
+        
+        // Try alternative paths if initial load fails
+        try {
+            BufferedImage spriteSheet = ResourceManager.getInstance().loadImage("Sprites/" + fileName);
+            if (spriteSheet != null) {
+                spriteSheets.put(name, spriteSheet);
+                System.out.println("Loaded sprite sheet (alt path): " + name);
+                return true;
+            }
+        } catch (Exception e) {
+            // Continue to next attempt
+        }
+        
+        try {
+            BufferedImage spriteSheet = ResourceManager.getInstance().loadImage(fileName);
+            if (spriteSheet != null) {
+                spriteSheets.put(name, spriteSheet);
+                System.out.println("Loaded sprite sheet (direct): " + name);
+                return true;
+            }
+        } catch (Exception e) {
+            System.err.println("Failed to load sprite sheet with all paths: " + fileName);
+        }
+        
         return false;
     }
     
@@ -166,7 +198,13 @@ public class SpriteSheetManager {
      * Get a sprite by name
      */
     public Sprite getSprite(String name) {
-        return sprites.get(name);
+        Sprite sprite = sprites.get(name);
+        if (sprite == null) {
+            System.err.println("Warning: Sprite not found: " + name);
+            // Return idle sprite as fallback
+            return sprites.get("player_idle");
+        }
+        return sprite;
     }
     
     /**
@@ -191,6 +229,7 @@ public class SpriteSheetManager {
     public void createPlayerSprites() {
         // Sprites are automatically created when configurations are registered
         // This method is kept for backwards compatibility
+        System.out.println("Player sprites created successfully");
     }
     
     /**
@@ -207,6 +246,19 @@ public class SpriteSheetManager {
      */
     public String[] getAvailableSprites() {
         return sprites.keySet().toArray(new String[0]);
+    }
+    
+    /**
+     * Debug method to print all loaded sprites
+     */
+    public void printLoadedSprites() {
+        System.out.println("=== Loaded Sprites ===");
+        for (String spriteName : sprites.keySet()) {
+            Sprite sprite = sprites.get(spriteName);
+            System.out.println(spriteName + " - Frames: " + sprite.getTotalFrames() + 
+                             ", Duration: " + sprite.getDuration().toMillis() + "ms");
+        }
+        System.out.println("====================");
     }
 }
 

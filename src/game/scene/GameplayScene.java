@@ -23,7 +23,7 @@ import game.sprites.LoopingSprite;
 import game.sprites.ProperlyScaledSprite;
 
 /**
- * Updated gameplay scene with enhanced physics and collision layers
+ * Gameplay scene with simplified and reliable physics integration
  */
 public class GameplayScene extends AbstractScene {
     private PlayerEntity player;
@@ -74,10 +74,10 @@ public class GameplayScene extends AbstractScene {
         // Create background layers first
         createBackground();
         
-        // Create a floor first
+        // Create the floor with proper positioning
         createFloor();
         
-        // Create the 1.6m tall player
+        // Create the player with proper positioning
         createPlayer();
         
         // Create some platforms
@@ -88,29 +88,71 @@ public class GameplayScene extends AbstractScene {
     }
     
     /**
-     * Creates the player with proper 1.6m dimensions
+     * Creates the floor with proper positioning
+     */
+    private void createFloor() {
+        // Floor position - bottom of the scene
+        double floorCenterX = SCENE_WIDTH / 2.0;
+        double floorCenterY = SCENE_HEIGHT - (FLOOR_HEIGHT / 2.0);
+        
+        floor = new FloorEntity(
+            floorCenterX,
+            floorCenterY,
+            SCENE_WIDTH,
+            (int)FLOOR_HEIGHT
+        );
+        
+        // Ensure floor is static and immovable
+        floor.setAffectedByGravity(false);
+        floor.setMass(0); // Static object
+        floor.setVelocity(new Vector2D(0, 0));
+        floor.setFriction(0.8f);
+        floor.setRestitution(0.0f);
+        
+        addGameObject(floor);
+        game.getPhysicsSystem().addObject(floor, "GROUND");
+        
+        System.out.println("Floor created at: " + floorCenterX + ", " + floorCenterY);
+        System.out.println("Floor dimensions: " + SCENE_WIDTH + "x" + (int)FLOOR_HEIGHT);
+    }
+    
+    /**
+     * Creates the player with proper 1.6m dimensions and positioning
      */
     private void createPlayer() {
-        // Calculate floor positions for 1.6m character
-        float floorCenterY = (float)(SCENE_HEIGHT - FLOOR_HEIGHT / 2);
-        float floorSurfaceY = (float)(floorCenterY - (FLOOR_HEIGHT / 2));
+        // Calculate floor surface position
+        double floorSurfaceY = SCENE_HEIGHT - FLOOR_HEIGHT;
         
-        // Create the player with 1.6m height (160 pixels)
+        // Player dimensions (1.6m = 160 pixels)
+        int playerHeight = 160;
+        int playerWidth = 80;
+        
+        // Position player ABOVE the floor surface with a small gap
+        double playerStartX = 5 * SCALE; // 5 meters from left
+        double playerStartY = floorSurfaceY - (playerHeight / 2.0) - 2; // 2 pixel gap above floor
+        
         player = new PlayerEntity(
-            5 * SCALE,  // Start 5m from the left edge
-            floorSurfaceY - 80, // Position player above the floor surface (80 pixels is half height)
+            playerStartX,
+            playerStartY,
             game.getKeyboardInput()
         );
         
-        // Add player to game objects and physics system with proper collision layer
+        // Set player physics properties
+        player.setMass(1.0f);
+        player.setAffectedByGravity(true);
+        player.setFriction(0.9f); // High friction for good control
+        player.setRestitution(0.0f); // No bounce
+        
+        // Add player to physics system with proper layer
         addGameObject(player);
-        game.getPhysicsSystem().addObject(player, "player");
+        game.getPhysicsSystem().addObject(player, "PLAYER");
         
         // Set player as camera target
         camera.setTarget(player.getPosition());
         
-        // Debug output
-        System.out.println("Created 1.6m tall player at position: " + player.getPosition().getX() + ", " + player.getPosition().getY());
+        System.out.println("Player created at: " + playerStartX + ", " + playerStartY);
+        System.out.println("Player dimensions: " + playerWidth + "x" + playerHeight);
+        System.out.println("Floor surface at Y: " + floorSurfaceY);
     }
     
     /**
@@ -149,30 +191,10 @@ public class GameplayScene extends AbstractScene {
     }
     
     /**
-     * Creates the floor for the level
-     */
-    private void createFloor() {
-        floor = new FloorEntity(
-            SCENE_WIDTH / 2,
-            SCENE_HEIGHT - FLOOR_HEIGHT / 2,
-            SCENE_WIDTH,
-            (int)FLOOR_HEIGHT
-        );
-        
-        floor.setAffectedByGravity(false);
-        floor.setMass(0);
-        floor.setVelocity(new Vector2D(0, 0));
-        floor.setFriction(0.8f);  // High friction for floor
-        
-        addGameObject(floor);
-        game.getPhysicsSystem().addObject(floor, "ground");
-    }
-    
-    /**
      * Creates platforms in the level
      */
     private void createPlatforms() {
-        float floorY = (float) (SCENE_HEIGHT - FLOOR_HEIGHT);
+        double floorY = SCENE_HEIGHT - FLOOR_HEIGHT;
         
         // Create platforms at various positions
         createPlatform(20 * SCALE, floorY - 3 * SCALE, 3 * SCALE, 1 * SCALE);
@@ -190,12 +212,13 @@ public class GameplayScene extends AbstractScene {
         PlatformEntity platform = new PlatformEntity(x, y, (int)width, (int)height);
         
         platform.setAffectedByGravity(false);
-        platform.setMass(0);
+        platform.setMass(0); // Static object
         platform.setVelocity(new Vector2D(0, 0));
         platform.setFriction(0.7f);  // Good friction for platforms
+        platform.setRestitution(0.0f);
         
         addGameObject(platform);
-        game.getPhysicsSystem().addObject(platform, "platform");
+        game.getPhysicsSystem().addObject(platform, "PLATFORM");
     }
     
     /**
@@ -205,9 +228,11 @@ public class GameplayScene extends AbstractScene {
         Random random = new Random();
         int numBoxes = 20;
         
+        double floorSurfaceY = SCENE_HEIGHT - FLOOR_HEIGHT;
+        
         for (int i = 0; i < numBoxes; i++) {
             double x = random.nextDouble() * SCENE_WIDTH;
-            double y = random.nextDouble() * 300;
+            double y = random.nextDouble() * (floorSurfaceY - 400) + 100; // Above floor
             int size = (int)(20 + random.nextInt(30));
             
             Color color = new Color(
@@ -217,21 +242,21 @@ public class GameplayScene extends AbstractScene {
             );
             
             BoxEntity box = new BoxEntity(x, y, size, size, color);
-            box.setFriction(0.6f);
-            box.setRestitution(0.3f);  // Slightly bouncy
+            box.setFriction(0.7f);
+            box.setRestitution(0.2f);  // Slightly bouncy
+            box.setMass(1.0f);
+            box.setAffectedByGravity(true);
             
             addGameObject(box);
-            game.getPhysicsSystem().addObject(box, "enemy");  // Using enemy layer for test boxes
+            game.getPhysicsSystem().addObject(box, "ENEMY");  // Using enemy layer for test boxes
         }
     }
     
     @Override
     public void initialize() {
         if (!initialized) {
-            setupCamera();
-            createGameObjects();
+            super.initialize();
             startBackgroundMusic();
-            
             initialized = true;
         }
     }
@@ -305,10 +330,11 @@ public class GameplayScene extends AbstractScene {
         // Ensure camera follows player
         camera.setTarget(player.getPosition());
         
-        // Force the floor to stay at the bottom
+        // Floor should stay perfectly still (redundant but safe)
         if (floor != null) {
+            double floorCenterY = SCENE_HEIGHT - (FLOOR_HEIGHT / 2.0);
+            floor.setPosition(SCENE_WIDTH / 2, floorCenterY);
             floor.setVelocity(new Vector2D(0, 0));
-            floor.setPosition(SCENE_WIDTH / 2, SCENE_HEIGHT - FLOOR_HEIGHT / 2);
         }
         
         // Handle special controls for testing movement abilities
@@ -382,9 +408,10 @@ public class GameplayScene extends AbstractScene {
      * Resets the player position
      */
     private void resetPlayer() {
-        float floorY = (float)(SCENE_HEIGHT - FLOOR_HEIGHT);
+        double floorSurfaceY = SCENE_HEIGHT - FLOOR_HEIGHT;
+        double playerY = floorSurfaceY - player.getHeight() / 2.0 - 2; // 2 pixel gap
         
-        player.setPosition(5 * SCALE, floorY - 80);
+        player.setPosition(5 * SCALE, playerY);
         player.setVelocity(new Vector2D(0, 0));
     }
     
@@ -433,38 +460,37 @@ public class GameplayScene extends AbstractScene {
         // Display controls
         g.drawString("Controls:", 20, 30);
         g.drawString("Arrow Keys - Move", 20, 50);
-        g.drawString("X - Run", 20, 70);
+        g.drawString("Shift - Run", 20, 70);
         g.drawString("Space - Jump", 20, 90);
         g.drawString("W - Dash", 20, 110);
         g.drawString("E - Teleport", 20, 130);
         g.drawString("Q - Close Teleport", 20, 150);
         g.drawString("R - Hook", 20, 170);
-        g.drawString("Shift - Block", 20, 190);
-        g.drawString("P - Pause", 20, 210);
-        g.drawString("ESC - Menu", 20, 230);
+        g.drawString("P - Pause", 20, 190);
+        g.drawString("ESC - Menu", 20, 210);
         
         // Test controls
-        g.drawString("Test Buffs:", 20, 260);
-        g.drawString("1 - Speed Buff", 20, 280);
-        g.drawString("2 - Jump Height Buff", 20, 300);
-        g.drawString("3 - Double Jump", 20, 320);
-        g.drawString("4 - Gravity Dash", 20, 340);
+        g.drawString("Test Buffs:", 20, 240);
+        g.drawString("1 - Speed Buff", 20, 260);
+        g.drawString("2 - Jump Height Buff", 20, 280);
+        g.drawString("3 - Double Jump", 20, 300);
+        g.drawString("4 - Gravity Dash", 20, 320);
         
         // Audio controls
-        g.drawString("NumPad +/- - Volume", 20, 370);
-        g.drawString("Ctrl + NumPad +/- - Music Volume", 20, 390);
+        g.drawString("NumPad +/- - Volume", 20, 350);
+        g.drawString("Ctrl + NumPad +/- - Music Volume", 20, 370);
         
         // Scene info
-        g.drawString("Scene dimensions: " + SCENE_WIDTH_METERS + "m x " + SCENE_HEIGHT_METERS + "m", 20, 420);
+        g.drawString("Scene dimensions: " + SCENE_WIDTH_METERS + "m x " + SCENE_HEIGHT_METERS + "m", 20, 400);
         
         // Volume indicators
-        g.drawString(String.format("Master Volume: %d%%", (int)(soundManager.getMasterVolume() * 100)), 20, 450);
-        g.drawString(String.format("Music Volume: %d%%", (int)(soundManager.getMusicVolume() * 100)), 20, 470);
-        g.drawString(String.format("SFX Volume: %d%%", (int)(soundManager.getSfxVolume() * 100)), 20, 490);
+        g.drawString(String.format("Master Volume: %d%%", (int)(soundManager.getMasterVolume() * 100)), 20, 430);
+        g.drawString(String.format("Music Volume: %d%%", (int)(soundManager.getMusicVolume() * 100)), 20, 450);
+        g.drawString(String.format("SFX Volume: %d%%", (int)(soundManager.getSfxVolume() * 100)), 20, 470);
         
         // Player info
         if (player != null) {
-            int yOffset = 530;
+            int yOffset = 500;
             g.drawString("Player Height: 1.6m (" + player.getHeight() + " pixels)", 20, yOffset);
             g.drawString("Player Position: " + formatVector(player.getPosition()), 20, yOffset + 20);
             g.drawString("Player Velocity: " + formatVector(player.getVelocity()), 20, yOffset + 40);
@@ -515,6 +541,17 @@ public class GameplayScene extends AbstractScene {
                 player.getWidth(),
                 player.getHeight()
             );
+            
+            // Draw floor collision box
+            if (floor != null) {
+                g.setColor(new Color(0, 255, 0, 128));
+                g.drawRect(
+                    (int)(floor.getPosition().getX() - floor.getWidth() / 2),
+                    (int)(floor.getPosition().getY() - floor.getHeight() / 2),
+                    floor.getWidth(),
+                    floor.getHeight()
+                );
+            }
             
             // Draw movement abilities range indicators
             g.setColor(new Color(0, 255, 255, 80));

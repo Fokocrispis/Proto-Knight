@@ -17,7 +17,8 @@ import game.scene.SceneManager;
 import game.physics.PhysicsSystem;
 
 /**
- * Main game class that sets up the window and manages the game loop.
+ * Main game class that sets up the window and manages the game loop
+ * Updated with enhanced physics system
  */
 public class Game {
     // Window settings
@@ -40,16 +41,12 @@ public class Game {
     private final SceneManager sceneManager;
     private final PhysicsSystem physicsSystem;
     
-    // In Game.java, update these fields:
-
-    // World size (for physics)
+    // World size (for physics) - 200m x 10m
     private final float worldWidth = 20000;  // 200m * 100 pixels per meter
-    private final float worldHeight = 3000;  // 30m * 100 pixels per meter
-
- // Rest of the file remains the same
+    private final float worldHeight = 1000;  // 10m * 100 pixels per meter
     
     /**
-     * Creates a new game instance.
+     * Creates a new game instance
      */
     public Game() {
         // Initialize systems
@@ -76,7 +73,7 @@ public class Game {
     }
     
     /**
-     * Sets up the game window.
+     * Sets up the game window
      */
     private void setupWindow() {
         window.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -89,7 +86,7 @@ public class Game {
     }
     
     /**
-     * Starts the game.
+     * Starts the game
      */
     public void start() {
         if (!isRunning) {
@@ -107,25 +104,24 @@ public class Game {
     }
     
     /**
-     * Initializes game scenes.
-     * Override this to add your own scenes.
+     * Initializes game scenes
+     * Override this to add your own scenes
      */
     protected void initializeScenes() {
         // This should be overridden by subclasses to register their scenes
-        // By default, we'll create a simple test scene in the next step
     }
     
     /**
-     * Updates the game state.
-     * Called each frame by the game loop.
+     * Updates the game state
+     * Called each frame by the game loop
      * 
-     * @param deltaTime Time elapsed since last update in milliseconds.
+     * @param deltaTime Time elapsed since last update in milliseconds
      */
     private void update(long deltaTime) {
         // Update scene manager (will update the active scene)
         sceneManager.update(deltaTime);
         
-        // Update physics system
+        // Update physics system - this is now our main physics update
         physicsSystem.update(deltaTime);
         
         // Update input state (must be called after all updates)
@@ -133,17 +129,17 @@ public class Game {
     }
     
     /**
-     * Triggers a repaint of the game panel.
+     * Triggers a repaint of the game panel
      */
     private void renderGame() {
         gamePanel.repaint();
     }
     
     /**
-     * Renders the game.
-     * Called by the game panel when it's being painted.
+     * Renders the game
+     * Called by the game panel when it's being painted
      * 
-     * @param g The graphics context.
+     * @param g The graphics context
      */
     private void render(Graphics2D g) {
         // Clear the screen
@@ -160,18 +156,25 @@ public class Game {
     }
     
     /**
-     * Renders debug information.
+     * Renders debug information
      * 
-     * @param g The graphics context.
+     * @param g The graphics context
      */
     private void renderDebugInfo(Graphics2D g) {
         g.setColor(Color.WHITE);
         g.drawString("FPS: " + GameLoop.getCurrentFPS(), 10, 20);
         g.drawString("Objects: " + physicsSystem.getPhysicsObjects().size(), 10, 40);
+        
+        // Show physics debug info when F3 is pressed
+        if (keyboardInput.isKeyPressed(KeyEvent.VK_F3)) {
+            g.drawString("Physics System: Enhanced (Robust)", 10, 60);
+            g.drawString("World Size: " + worldWidth/100 + "m x " + worldHeight/100 + "m", 10, 80);
+            g.drawString("Physics Debug: ON", 10, 100);
+        }
     }
     
     /**
-     * Shuts down the game.
+     * Shuts down the game
      */
     private void shutdown() {
         System.out.println("Game shutting down...");
@@ -179,56 +182,56 @@ public class Game {
     }
     
     /**
-     * Gets the keyboard input handler.
+     * Gets the keyboard input handler
      */
     public KeyboardInput getKeyboardInput() {
         return keyboardInput;
     }
     
     /**
-     * Gets the scene manager.
+     * Gets the scene manager
      */
     public SceneManager getSceneManager() {
         return sceneManager;
     }
     
     /**
-     * Gets the physics system.
+     * Gets the physics system
      */
     public PhysicsSystem getPhysicsSystem() {
         return physicsSystem;
     }
     
     /**
-     * Gets the window width.
+     * Gets the window width
      */
     public int getWidth() {
         return WINDOW_WIDTH;
     }
     
     /**
-     * Gets the window height.
+     * Gets the window height
      */
     public int getHeight() {
         return WINDOW_HEIGHT;
     }
     
     /**
-     * Gets the world width.
+     * Gets the world width
      */
     public float getWorldWidth() {
         return worldWidth;
     }
     
     /**
-     * Gets the world height.
+     * Gets the world height
      */
     public float getWorldHeight() {
         return worldHeight;
     }
     
     /**
-     * Inner class for the game's rendering panel.
+     * Inner class for the game's rendering panel
      */
     private class GamePanel extends JComponent {
         private final Consumer<Graphics2D> renderFunction;
