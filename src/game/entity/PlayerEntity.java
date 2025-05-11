@@ -12,46 +12,65 @@ import game.sprites.Sprite;
 import game.sprites.SpriteSheetManager;
 
 /**
- * Simple PlayerEntity with basic sprite animations
+ * Simple PlayerEntity with correct animations
  */
 public class PlayerEntity extends AbstractEntity {
+    // Character dimensions (1.6m tall)
+    private static final int PLAYER_HEIGHT = 160; // 1.6m
+    private static final int PLAYER_WIDTH = 80;   // 0.8m
+    
     // Movement parameters
-    private static final double MOVE_SPEED = 25;
-    private static final double JUMP_FORCE = -550.0;
-    private static final double MAX_SPEED = 750.0;
-    private static final double DASH_SPEED = 1500.0;
-    private static final double DASH_DURATION = 300.0;
+    private static final double MOVE_SPEED = 300.0;
+    private static final double RUN_SPEED = 500.0;
+    private static final double JUMP_FORCE = -600.0;
+    private static final double MAX_FALL_SPEED = 800.0;
+    private static final double DASH_SPEED = 800.0;
+    private static final double DASH_DURATION = 250.0;
     
     // Player state
     private boolean isOnGround = false;
+    private boolean wasOnGround = false;
     private boolean canJump = true;
     private boolean isFacingRight = true;
     private boolean isDashing = false;
+    private boolean isRolling = false;
+    private boolean isBlocking = false;
+    
+    // Timing variables
     private long lastJumpTime = 0;
     private long dashStartTime = 0;
+    private long rollStartTime = 0;
+    private long blockStartTime = 0;
     
     // Input
     private final KeyboardInput input;
     
     // Sprites
-    private final SpriteSheetManager spriteManager;
+    public final SpriteSheetManager spriteManager;
     private Sprite currentSprite;
     private boolean isSpriteLocked = false;
     private long activeSpriteTimer = 0;
     
     // Sprite references
     private Sprite idleSprite;
+    private Sprite walkSprite;
+    private Sprite runStartSprite;
     private Sprite runSprite;
     private Sprite jumpSprite;
+    private Sprite fallSprite;
+    private Sprite landQuickSprite;
+    private Sprite landFullSprite;
     private Sprite dashSprite;
-    private Sprite attackSprite;
-    private Sprite fallingSprite;
+    private Sprite rollSprite;
+    private Sprite blockSprite;
+    private boolean isRunning = false;
+    private boolean isWalking = false;
     
     /**
-     * Creates a new player entity
+     * Creates a 1.6m tall player entity
      */
-    public PlayerEntity(double x, double y, int width, int height, KeyboardInput input) {
-        super(x, y, width, height);
+    public PlayerEntity(double x, double y, KeyboardInput input) {
+        super(x, y, PLAYER_WIDTH, PLAYER_HEIGHT);
         this.input = input;
         
         // Initialize sprite manager and load sprites
@@ -63,7 +82,7 @@ public class PlayerEntity extends AbstractEntity {
         this.affectedByGravity = true;
         
         // Create collision shape
-        this.collisionShape = new AABB(position, width, height);
+        this.collisionShape = new AABB(position, PLAYER_WIDTH, PLAYER_HEIGHT);
     }
     
     /**
@@ -74,11 +93,16 @@ public class PlayerEntity extends AbstractEntity {
         
         // Get sprite references
         idleSprite = spriteManager.getSprite("player_idle");
+        walkSprite = spriteManager.getSprite("player_walk");
+        runStartSprite = spriteManager.getSprite("player_run_start");
         runSprite = spriteManager.getSprite("player_run");
         jumpSprite = spriteManager.getSprite("player_jump");
-        fallingSprite = spriteManager.getSprite("player_fall");
+        fallSprite = spriteManager.getSprite("player_fall");
+        landQuickSprite = spriteManager.getSprite("player_land_quick");
+        landFullSprite = spriteManager.getSprite("player_land_full");
         dashSprite = spriteManager.getSprite("player_dash");
-        attackSprite = spriteManager.getSprite("player_attack");
+        rollSprite = spriteManager.getSprite("player_roll");
+        blockSprite = spriteManager.getSprite("player_block");
         
         // Set initial sprite
         currentSprite = idleSprite;
@@ -89,7 +113,7 @@ public class PlayerEntity extends AbstractEntity {
     @Override
     public void update(long deltaTime) {
         // Reset ground status
-        boolean wasOnGround = isOnGround;
+        wasOnGround = isOnGround;
         isOnGround = false;
         
         // Handle input
@@ -106,13 +130,28 @@ public class PlayerEntity extends AbstractEntity {
         // Reset jump ability when landing
         if (!wasOnGround && isOnGround) {
             canJump = true;
+            
+            // Play landing animation
+            if (Math.abs(velocity.getY()) > 400) {
+                currentSprite = landFullSprite;
+                isSpriteLocked = true;
+                activeSpriteTimer = 0;
+            } else {
+                currentSprite = landQuickSprite;
+                isSpriteLocked = true;
+                activeSpriteTimer = 0;
+            }
         }
         
         // Handle sprite locking
         if (isSpriteLocked && activeSpriteTimer >= currentSprite.getDuration().toMillis()) {
             activeSpriteTimer = 0;
             isSpriteLocked = false;
+            
+            // Reset states
             isDashing = false;
+            isRolling = false;
+            isBlocking = false;
         }
         
         if (isSpriteLocked) {
@@ -127,12 +166,17 @@ public class PlayerEntity extends AbstractEntity {
         double dt = deltaTime / 1000.0;
         long currentTime = System.currentTimeMillis();
         
-		if (velocity.getX() > MAX_SPEED&& isDashing==false) {
-			velocity.setX(MAX_SPEED);
-		}
-		if (velocity.getX() < -MAX_SPEED&& isDashing==false) {
-			velocity.setX(-MAX_SPEED);
-		}
+        // Handle blocking
+        if (input.isKeyPressed(KeyEvent.VK_SHIFT)) {
+            if (!isSpriteLocked) {
+                currentSprite = blockSprite;
+                isSpriteLocked = true;
+                isBlocking = true;
+                blockStartTime = currentTime;
+                activeSpriteTimer = 0;
+            }
+            return; // Skip other inputs while blocking
+        }
         
         // Handle dash
         if (input.isKeyPressed(KeyEvent.VK_W) && !isDashing && currentTime - dashStartTime > 500) {
@@ -141,7 +185,7 @@ public class PlayerEntity extends AbstractEntity {
                 isSpriteLocked = true;
                 isDashing = true;
                 dashStartTime = currentTime;
-                currentSprite.reset();
+                activeSpriteTimer = 0;
                 
                 // Apply dash velocity
                 double dashDirection = isFacingRight ? 1.0 : -1.0;
@@ -149,58 +193,92 @@ public class PlayerEntity extends AbstractEntity {
             }
         }
         
-        // Handle attack
-        else if (input.isKeyPressed(KeyEvent.VK_E)) {
+        // Handle roll
+        else if (input.isKeyPressed(KeyEvent.VK_E) && !isRolling && currentTime - rollStartTime > 500) {
             if (!isSpriteLocked) {
-                currentSprite = attackSprite;
+                currentSprite = rollSprite;
                 isSpriteLocked = true;
-                currentSprite.reset();
+                isRolling = true;
+                rollStartTime = currentTime;
+                activeSpriteTimer = 0;
             }
         }
         
         // Handle movement
         else if (input.isKeyPressed(KeyEvent.VK_RIGHT)) {
             if (!isSpriteLocked) {
-                currentSprite = runSprite;
-                velocity.add(MOVE_SPEED * 60 * dt, 0);
                 isFacingRight = true;
-            }
-        } else if (input.isKeyPressed(KeyEvent.VK_LEFT)) {
-            if (!isSpriteLocked) {
-                currentSprite = runSprite;
-                velocity.add(-MOVE_SPEED * 60 * dt, 0);
-                isFacingRight = false;
-            }
-        }
-        
-        // Handle idle
-		else {
-			if (!isSpriteLocked) {
-				if(isOnGround==true)
-					currentSprite = idleSprite;
-				else
-					currentSprite = idleSprite;
-			}
-			if(isDashing==false)
-				velocity.setX(0);
-		}
-        
-        // Handle jump
-        if (input.isKeyPressed(KeyEvent.VK_SPACE) && (currentTime - lastJumpTime > 750)) {
-            if (canJump) {
-                velocity.setY(JUMP_FORCE);
                 
-                if (!isSpriteLocked) {
-                    currentSprite = jumpSprite;
-                    isSpriteLocked = true;
-                    currentSprite.reset();
+                // Check if running
+                if (input.isKeyPressed(KeyEvent.VK_X)) {
+                    // Use run animations
+                    if (currentSprite != runSprite && currentSprite != runStartSprite) {
+                        currentSprite = runStartSprite;
+                        activeSpriteTimer = 0;
+                    } else if (currentSprite == runStartSprite && 
+                              activeSpriteTimer >= runStartSprite.getDuration().toMillis()) {
+                        currentSprite = runSprite;
+                    }
+                    velocity.setX(RUN_SPEED);
+                } else {
+                    // Use walk animation
+                    currentSprite = walkSprite;
+                    velocity.setX(MOVE_SPEED);
                 }
             }
-            
+        }
+        else if (input.isKeyPressed(KeyEvent.VK_LEFT)) {
+            if (!isSpriteLocked) {
+                isFacingRight = false;
+                
+                // Check if running
+                if (input.isKeyPressed(KeyEvent.VK_X)) {
+                    // Use run animations
+                    if (currentSprite != runSprite && currentSprite != runStartSprite) {
+                        currentSprite = runStartSprite;
+                        activeSpriteTimer = 0;
+                    } else if (currentSprite == runStartSprite && 
+                              activeSpriteTimer >= runStartSprite.getDuration().toMillis()) {
+                        currentSprite = runSprite;
+                    }
+                    velocity.setX(-RUN_SPEED);
+                } else {
+                    // Use walk animation
+                    currentSprite = walkSprite;
+                    velocity.setX(-MOVE_SPEED);
+                }
+            }
+        }
+        // Handle idle
+        else {
+            if (!isSpriteLocked) {
+                currentSprite = idleSprite;
+            }
+            if(!isDashing)
+                velocity.setX(0);
+        }
+        
+        // Handle jump
+        if (input.isKeyPressed(KeyEvent.VK_SPACE) && canJump && currentTime - lastJumpTime > 500) {
+            velocity.setY(JUMP_FORCE);
             lastJumpTime = currentTime;
             isOnGround = false;
+            canJump = false;
+            
+            if (!isSpriteLocked) {
+                currentSprite = jumpSprite;
+            }
         }
- 
+        
+        // Handle fall sprite
+        if (!isOnGround && velocity.getY() > 0 && !isSpriteLocked) {
+            currentSprite = fallSprite;
+        }
+        
+        // Update animation timer for non-locked sprites
+        if (!isSpriteLocked) {
+            activeSpriteTimer += deltaTime;
+        }
     }
     
     @Override
@@ -211,6 +289,9 @@ public class PlayerEntity extends AbstractEntity {
         int spriteX = (int)(position.getX() - currentSprite.getSize().width / 2);
         int spriteY = (int)(position.getY() - currentSprite.getSize().height / 2);
         
+        // Adjust Y position for 1.6m height scaling
+        spriteY += 10; // Fine-tune this value as needed
+        
         // Draw sprite (flip if facing left)
         if (isFacingRight) {
             g.drawImage(
@@ -218,7 +299,7 @@ public class PlayerEntity extends AbstractEntity {
                 spriteX,
                 spriteY,
                 currentSprite.getSize().width,
-                (int)(currentSprite.getSize().height*1.28),
+                (int)(currentSprite.getSize().height * 1.28),
                 null
             );
         } else {
@@ -227,7 +308,7 @@ public class PlayerEntity extends AbstractEntity {
                 spriteX + currentSprite.getSize().width,
                 spriteY,
                 -currentSprite.getSize().width,
-                (int)(currentSprite.getSize().height*1.28),
+                (int)(currentSprite.getSize().height * 1.28),
                 null
             );
         }
@@ -244,5 +325,11 @@ public class PlayerEntity extends AbstractEntity {
     // Getters
     public boolean isDashing() { return isDashing; }
     public boolean isOnGround() { return isOnGround; }
+    public boolean isRolling() { return isRolling; }
+    public boolean isBlocking() { return isBlocking; }
+    public boolean isFacingRight() { return isFacingRight; }
     public Sprite getCurrentSprite() { return currentSprite; }
+    public boolean isRunning() { return isRunning;}
+    public boolean isWalking() { return isWalking; }
+
 }

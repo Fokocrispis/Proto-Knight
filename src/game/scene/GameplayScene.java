@@ -15,9 +15,12 @@ import game.entity.PlayerEntity;
 import game.entity.PlatformEntity;
 import game.entity.FloorEntity;
 import game.physics.PhysicsObject;
+import game.sprites.Sprite;
+import game.sprites.LoopingSprite;
+import game.sprites.ProperlyScaledSprite;
 
 /**
- * Main gameplay scene with simplified sprite loading
+ * Main gameplay scene with 1.6m character and fixed sprite looping
  */
 public class GameplayScene extends AbstractScene {
     private PlayerEntity player;
@@ -32,10 +35,6 @@ public class GameplayScene extends AbstractScene {
     
     // Scale factors for game units (1 unit = 100 pixels)
     private static final double SCALE = 100.0;
-    private static final double PLAYER_HEIGHT = 1.8 * SCALE;
-    private static final double PLAYER_WIDTH = 0.6 * SCALE;
-    private static final double PLATFORM_HEIGHT = 1.0 * SCALE;
-    private static final double PLATFORM_WIDTH = 3.0 * SCALE;
     private static final double FLOOR_HEIGHT = 100;
     
     // Scene dimensions (200m x 30m)
@@ -75,16 +74,28 @@ public class GameplayScene extends AbstractScene {
         // Create a floor first
         createFloor();
         
-        // Calculate floor positions
-        float floorCenterY = (float)(SCENE_HEIGHT - FLOOR_HEIGHT / 2);
-        float floorSurfaceY = (float) (floorCenterY - (FLOOR_HEIGHT / 2));
+        // Create the 1.6m tall player
+        createPlayer();
         
-        // Create the player with the simplified PlayerEntity
+        // Create some platforms
+        createPlatforms();
+        
+        // Create some physics objects
+        createPhysicsObjects();
+    }
+    
+    /**
+     * Creates the player with proper 1.6m dimensions
+     */
+    private void createPlayer() {
+        // Calculate floor positions for 1.6m character
+        float floorCenterY = (float)(SCENE_HEIGHT - FLOOR_HEIGHT / 2);
+        float floorSurfaceY = (float)(floorCenterY - (FLOOR_HEIGHT / 2));
+        
+        // Create the player with 1.6m height (160 pixels)
         player = new PlayerEntity(
             5 * SCALE,  // Start 5m from the left edge
-            floorSurfaceY - PLAYER_HEIGHT / 2 - 10, // Position player above the floor surface
-            (int)PLAYER_WIDTH, // Collision box width
-            (int)PLAYER_HEIGHT, // Collision box height
+            floorSurfaceY - 80, // Position player above the floor surface (80 pixels is half height)
             game.getKeyboardInput()
         );
         
@@ -92,14 +103,11 @@ public class GameplayScene extends AbstractScene {
         addGameObject(player);
         game.getPhysicsSystem().addObject(player);
         
-        // Create some platforms
-        createPlatforms();
-        
-        // Create some physics objects
-        createPhysicsObjects();
-        
         // Set player as camera target
         camera.setTarget(player.getPosition());
+        
+        // Debug output
+        System.out.println("Created 1.6m tall player at position: " + player.getPosition().getX() + ", " + player.getPosition().getY());
     }
     
     /**
@@ -119,21 +127,21 @@ public class GameplayScene extends AbstractScene {
         backgroundLayers[1] = new BackgroundLayer(
             "background_layer_1.png",
             BACKGROUND_TILE_WIDTH,
-            1.8  // Almost frozen
+            0.2  // Very slow parallax
         );
         
         // Layer 2: Middle background
         backgroundLayers[2] = new BackgroundLayer(
             "background_layer_2.png",
             BACKGROUND_TILE_WIDTH,
-            1.7   // Medium parallax
+            0.5   // Medium parallax
         );
         
         // Layer 3: Near background
         backgroundLayers[3] = new BackgroundLayer(
             "background_layer_3.png",
             BACKGROUND_TILE_WIDTH,
-            1.2   // Moves almost with camera
+            0.8   // Faster parallax
         );
     }
     
@@ -163,11 +171,11 @@ public class GameplayScene extends AbstractScene {
         float floorY = (float) (SCENE_HEIGHT - FLOOR_HEIGHT);
         
         // Create platforms at various positions
-        createPlatform(20 * SCALE, floorY - 3 * SCALE, PLATFORM_WIDTH, PLATFORM_HEIGHT);
-        createPlatform(50 * SCALE, floorY - 5 * SCALE, PLATFORM_WIDTH, PLATFORM_HEIGHT);
-        createPlatform(80 * SCALE, floorY - 4 * SCALE, PLATFORM_WIDTH, PLATFORM_HEIGHT);
-        createPlatform(120 * SCALE, floorY - 8 * SCALE, PLATFORM_WIDTH, PLATFORM_HEIGHT);
-        createPlatform(160 * SCALE, floorY - 6 * SCALE, PLATFORM_WIDTH, PLATFORM_HEIGHT);
+        createPlatform(20 * SCALE, floorY - 3 * SCALE, 3 * SCALE, 1 * SCALE);
+        createPlatform(50 * SCALE, floorY - 5 * SCALE, 3 * SCALE, 1 * SCALE);
+        createPlatform(80 * SCALE, floorY - 4 * SCALE, 3 * SCALE, 1 * SCALE);
+        createPlatform(120 * SCALE, floorY - 8 * SCALE, 3 * SCALE, 1 * SCALE);
+        createPlatform(160 * SCALE, floorY - 6 * SCALE, 3 * SCALE, 1 * SCALE);
     }
     
     /**
@@ -322,6 +330,7 @@ public class GameplayScene extends AbstractScene {
         // Check for scene change
         if (game.getKeyboardInput().isKeyJustPressed(KeyEvent.VK_ESCAPE)) {
             // Transition to menu scene
+            game.getSceneManager().changeScene("menu");
         }
         
         // Check if player has fallen off the world
@@ -363,7 +372,7 @@ public class GameplayScene extends AbstractScene {
     private void resetPlayer() {
         float floorY = (float)(SCENE_HEIGHT - FLOOR_HEIGHT);
         
-        player.setPosition(5 * SCALE, floorY - PLAYER_HEIGHT / 2 - 10);
+        player.setPosition(5 * SCALE, floorY - 80);
         player.setVelocity(new Vector2D(0, 0));
     }
     
@@ -413,40 +422,97 @@ public class GameplayScene extends AbstractScene {
         g.drawString("Controls:", 20, 30);
         g.drawString("Arrow Keys - Move", 20, 50);
         g.drawString("Space - Jump", 20, 70);
-        g.drawString("E - Attack", 20, 90);
-        g.drawString("W - Dash", 20, 110);
-        g.drawString("P - Pause", 20, 130);
-        g.drawString("ESC - Menu", 20, 150);
+        g.drawString("Shift - Run", 20, 90);
+        g.drawString("P - Pause", 20, 110);
+        g.drawString("ESC - Menu", 20, 130);
         
         // Audio controls
-        g.drawString("NumPad +/- - Volume", 20, 180);
-        g.drawString("Ctrl + NumPad +/- - Music Volume", 20, 200);
+        g.drawString("NumPad +/- - Volume", 20, 160);
+        g.drawString("Ctrl + NumPad +/- - Music Volume", 20, 180);
         
         // Scene info
-        g.drawString("Scene dimensions: " + SCENE_WIDTH_METERS + "m x " + SCENE_HEIGHT_METERS + "m", 20, 230);
+        g.drawString("Scene dimensions: " + SCENE_WIDTH_METERS + "m x " + SCENE_HEIGHT_METERS + "m", 20, 210);
         
         // Volume indicators
-        g.drawString(String.format("Master Volume: %d%%", (int)(soundManager.getMasterVolume() * 100)), 20, 260);
-        g.drawString(String.format("Music Volume: %d%%", (int)(soundManager.getMusicVolume() * 100)), 20, 280);
-        g.drawString(String.format("SFX Volume: %d%%", (int)(soundManager.getSfxVolume() * 100)), 20, 300);
+        g.drawString(String.format("Master Volume: %d%%", (int)(soundManager.getMasterVolume() * 100)), 20, 240);
+        g.drawString(String.format("Music Volume: %d%%", (int)(soundManager.getMusicVolume() * 100)), 20, 260);
+        g.drawString(String.format("SFX Volume: %d%%", (int)(soundManager.getSfxVolume() * 100)), 20, 280);
         
         // Player info
         if (player != null) {
-            g.drawString("Player Position: " + formatVector(player.getPosition()), 20, 330);
-            g.drawString("Player Velocity: " + formatVector(player.getVelocity()), 20, 350);
-            g.drawString("On Ground: " + (player.isOnGround() ? "Yes" : "No"), 20, 370);
-            g.drawString("Current Sprite: " + 
-                (player.getCurrentSprite() != null ? player.getCurrentSprite().getName() : "None"), 20, 390);
+            int yOffset = 320;
+            g.drawString("Player Height: 1.6m (" + player.getHeight() + " pixels)", 20, yOffset);
+            g.drawString("Player Position: " + formatVector(player.getPosition()), 20, yOffset + 20);
+            g.drawString("Player Velocity: " + formatVector(player.getVelocity()), 20, yOffset + 40);
+            g.drawString("On Ground: " + (player.isOnGround() ? "Yes" : "No"), 20, yOffset + 60);
             
-            // Player state info
-            g.drawString("Dashing: " + (player.isDashing() ? "Yes" : "No"), 20, 410);
-        } else {
-            g.drawString("Loading player...", 20, 330);
+            if (player.getCurrentSprite() != null) {
+                g.drawString("Current Sprite: " + player.getCurrentSprite().getName(), 20, yOffset + 80);
+                
+                Sprite sprite = player.getCurrentSprite();
+                g.drawString("Sprite Size: " + sprite.getSize().width + "x" + sprite.getSize().height, 20, yOffset + 100);
+                
+                if (sprite instanceof LoopingSprite) {
+                    LoopingSprite loopingSprite = (LoopingSprite) sprite;
+                    g.drawString("Looping: " + loopingSprite.isLooping(), 20, yOffset + 120);
+                    g.drawString("Completed: " + loopingSprite.hasCompleted(), 20, yOffset + 140);
+                }
+            } else {
+                g.drawString("Loading sprites...", 20, yOffset + 80);
+            }
+            
+            g.drawString("Running: " + (player.isRunning() ? "Yes" : "No"), 20, yOffset + 160);
+            g.drawString("Walking: " + (player.isWalking() ? "Yes" : "No"), 20, yOffset + 180);
         }
         
         // Draw pause screen if paused
         if (isPaused) {
             drawPauseScreen(g);
+        }
+        
+        // Draw debug info
+        if (game.getKeyboardInput().isKeyPressed(KeyEvent.VK_F3)) {
+            drawPlayerDebugInfo(g);
+        }
+        
+        g.drawString("Press F3 to show collision bounds", 20, game.getHeight() - 20);
+    }
+    
+    /**
+     * Draws debug information for the player
+     */
+    private void drawPlayerDebugInfo(Graphics2D g) {
+        if (player != null) {
+            // Draw collision box
+            g.setColor(new Color(255, 0, 0, 128));
+            g.drawRect(
+                (int)(player.getPosition().getX() - player.getWidth() / 2),
+                (int)(player.getPosition().getY() - player.getHeight() / 2),
+                player.getWidth(),
+                player.getHeight()
+            );
+            
+            // Draw height indicator
+            g.setColor(Color.YELLOW);
+            g.drawString("Height: 1.6m (" + player.getHeight() + "px)", 
+                        (int)player.getPosition().getX() - 50, 
+                        (int)player.getPosition().getY() - player.getHeight() / 2 - 5);
+            
+            // Draw sprite bounds
+            if (player.getCurrentSprite() != null) {
+                Sprite currentSprite = player.getCurrentSprite();
+                g.setColor(new Color(0, 255, 0, 128));
+                
+                if (currentSprite instanceof ProperlyScaledSprite) {
+                    ProperlyScaledSprite scaledSprite = (ProperlyScaledSprite) currentSprite;
+                    int renderX = scaledSprite.getRenderX(player.getPosition().getX());
+                    int renderY = scaledSprite.getRenderY(player.getPosition().getY(), player.getHeight());
+                    
+                    g.drawRect(renderX, renderY, 
+                              currentSprite.getSize().width, 
+                              currentSprite.getSize().height);
+                }
+            }
         }
     }
     
