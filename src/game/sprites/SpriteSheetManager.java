@@ -72,18 +72,19 @@ public class SpriteSheetManager {
         loadSpriteSheet("player", "JoannaD'ArcIII-Sheet#1.png");
         
         // Define frame size and scale
-        Dimension frameSize = new Dimension(64, 64);
+        Dimension frameSize = new Dimension(98, 66);
         double scale = 3.0;
         
         // Create animations (estimate frame positions - adjust as needed)
         createSprite("player_idle", "player", frameSize, scale, 
-                    0, 7, Duration.ofSeconds(1));
+                    0, 6, Duration.ofSeconds(1));
         
-        createSprite("player_run", "player", frameSize, scale, 
-                    7, 8, Duration.ofMillis(800));
+        createSprite("player_run", "player", frameSize, scale,
+        		
+                    37, 23, Duration.ofMillis(800));
         
         createSprite("player_dash", "player", frameSize, scale, 
-                    15, 5, Duration.ofMillis(200));
+                    /*222*/74, 12, Duration.ofMillis(300));
         
         createSprite("player_attack", "player", frameSize, scale, 
                     20, 6, Duration.ofMillis(350));
@@ -92,10 +93,10 @@ public class SpriteSheetManager {
                     26, 6, Duration.ofMillis(450));
         
         createSprite("player_jump", "player", frameSize, scale, 
-                    32, 5, Duration.ofMillis(500));
+                    111, 10, Duration.ofMillis(750));
         
         createSprite("player_fall", "player", frameSize, scale, 
-                    37, 4, Duration.ofMillis(600));
+                    117, 4, Duration.ofMillis(300));
         
         createSprite("player_crouch", "player", frameSize, scale, 
                     41, 4, Duration.ofSeconds(1));

@@ -1,0 +1,22 @@
+Rows of 37
+	     start | size
+Idle:        0	     7
+walk:        37	     23
+start_run :  74	     6
+run:	     80      4
+run_turning: two sequences for the rest of the row  for when the player turns to the other direction while running
+jump_ start: 111     6
+fall:	     117     4
+landing:     122     2 (quick land) or 4(landing and idle) 
+
+simple definitions of rows:
+1. idle
+2. walking
+3. running
+4. jumping and landing
+5. jumping while running with rolling landing
+6. rolling
+7. dashing
+8. blocking (optional frames in the middle for hit on block)
+9. Dashing on landing
+

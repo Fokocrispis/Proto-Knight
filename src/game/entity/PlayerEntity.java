@@ -18,9 +18,9 @@ public class PlayerEntity extends AbstractEntity {
     // Movement parameters
     private static final double MOVE_SPEED = 25;
     private static final double JUMP_FORCE = -550.0;
-    private static final double MAX_SPEED = 1000.0;
-    private static final double DASH_SPEED = 500.0;
-    private static final double DASH_DURATION = 200.0;
+    private static final double MAX_SPEED = 750.0;
+    private static final double DASH_SPEED = 1500.0;
+    private static final double DASH_DURATION = 300.0;
     
     // Player state
     private boolean isOnGround = false;
@@ -45,6 +45,7 @@ public class PlayerEntity extends AbstractEntity {
     private Sprite jumpSprite;
     private Sprite dashSprite;
     private Sprite attackSprite;
+    private Sprite fallingSprite;
     
     /**
      * Creates a new player entity
@@ -75,6 +76,7 @@ public class PlayerEntity extends AbstractEntity {
         idleSprite = spriteManager.getSprite("player_idle");
         runSprite = spriteManager.getSprite("player_run");
         jumpSprite = spriteManager.getSprite("player_jump");
+        fallingSprite = spriteManager.getSprite("player_fall");
         dashSprite = spriteManager.getSprite("player_dash");
         attackSprite = spriteManager.getSprite("player_attack");
         
@@ -125,6 +127,13 @@ public class PlayerEntity extends AbstractEntity {
         double dt = deltaTime / 1000.0;
         long currentTime = System.currentTimeMillis();
         
+		if (velocity.getX() > MAX_SPEED&& isDashing==false) {
+			velocity.setX(MAX_SPEED);
+		}
+		if (velocity.getX() < -MAX_SPEED&& isDashing==false) {
+			velocity.setX(-MAX_SPEED);
+		}
+        
         // Handle dash
         if (input.isKeyPressed(KeyEvent.VK_W) && !isDashing && currentTime - dashStartTime > 500) {
             if (!isSpriteLocked) {
@@ -165,12 +174,16 @@ public class PlayerEntity extends AbstractEntity {
         }
         
         // Handle idle
-        else {
-            if (!isSpriteLocked) {
-                currentSprite = idleSprite;
-            }
-            velocity.setX(0);
-        }
+		else {
+			if (!isSpriteLocked) {
+				if(isOnGround==true)
+					currentSprite = idleSprite;
+				else
+					currentSprite = idleSprite;
+			}
+			if(isDashing==false)
+				velocity.setX(0);
+		}
         
         // Handle jump
         if (input.isKeyPressed(KeyEvent.VK_SPACE) && (currentTime - lastJumpTime > 750)) {
@@ -179,6 +192,7 @@ public class PlayerEntity extends AbstractEntity {
                 
                 if (!isSpriteLocked) {
                     currentSprite = jumpSprite;
+                    isSpriteLocked = true;
                     currentSprite.reset();
                 }
             }
@@ -186,6 +200,7 @@ public class PlayerEntity extends AbstractEntity {
             lastJumpTime = currentTime;
             isOnGround = false;
         }
+ 
     }
     
     @Override
@@ -203,7 +218,7 @@ public class PlayerEntity extends AbstractEntity {
                 spriteX,
                 spriteY,
                 currentSprite.getSize().width,
-                currentSprite.getSize().height,
+                (int)(currentSprite.getSize().height*1.28),
                 null
             );
         } else {
@@ -212,7 +227,7 @@ public class PlayerEntity extends AbstractEntity {
                 spriteX + currentSprite.getSize().width,
                 spriteY,
                 -currentSprite.getSize().width,
-                currentSprite.getSize().height,
+                (int)(currentSprite.getSize().height*1.28),
                 null
             );
         }
