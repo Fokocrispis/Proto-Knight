@@ -12,30 +12,23 @@ import game.sprites.Sprite;
 import game.sprites.SpriteSheetManager;
 
 /**
- * A player entity with sprite animations and dynamic hitbox.
+ * Simple PlayerEntity with basic sprite animations
  */
 public class PlayerEntity extends AbstractEntity {
     // Movement parameters
     private static final double MOVE_SPEED = 25;
     private static final double JUMP_FORCE = -550.0;
     private static final double MAX_SPEED = 1000.0;
-    private static final double GROUND_FRICTION = 0.9;
-    private static final double AIR_RESISTANCE = 0.8;
-    
-    // Sprite constants
-    private static final int X_OFFSET = 96; // Offset for collision box relative to sprite
-    private static final double SCALE = 100.0; // 1 meter = 100 pixels
-    
-    // Hitbox dimensions (smaller than the actual sprite)
-    private final int baseWidth;  // Width when idle
-    private final int baseHeight; // Height when idle
+    private static final double DASH_SPEED = 500.0;
+    private static final double DASH_DURATION = 200.0;
     
     // Player state
     private boolean isOnGround = false;
     private boolean canJump = true;
     private boolean isFacingRight = true;
-    private boolean isRunning = false;
+    private boolean isDashing = false;
     private long lastJumpTime = 0;
+    private long dashStartTime = 0;
     
     // Input
     private final KeyboardInput input;
@@ -49,108 +42,63 @@ public class PlayerEntity extends AbstractEntity {
     // Sprite references
     private Sprite idleSprite;
     private Sprite runSprite;
-    private Sprite crouchSprite;
-    private Sprite attackSprite;
-    private Sprite airAttackSprite;
     private Sprite jumpSprite;
-    
-    // Sprite position offset adjustments
-    private static final int FEET_OFFSET_Y = 15; // Offset for feet alignment
+    private Sprite dashSprite;
+    private Sprite attackSprite;
     
     /**
-     * Creates a new player entity with dynamic hitbox.
+     * Creates a new player entity
      */
     public PlayerEntity(double x, double y, int width, int height, KeyboardInput input) {
         super(x, y, width, height);
         this.input = input;
-        this.baseWidth = width;
-        this.baseHeight = height;
         
-        // Initialize sprite manager
+        // Initialize sprite manager and load sprites
         this.spriteManager = new SpriteSheetManager();
+        loadSprites();
         
-        // Load player sprites
+        // Player physics properties
+        this.mass = 1.0F;
+        this.affectedByGravity = true;
+        
+        // Create collision shape
+        this.collisionShape = new AABB(position, width, height);
+    }
+    
+    /**
+     * Loads all player sprites
+     */
+    private void loadSprites() {
         spriteManager.createPlayerSprites();
         
         // Get sprite references
         idleSprite = spriteManager.getSprite("player_idle");
         runSprite = spriteManager.getSprite("player_run");
-        crouchSprite = spriteManager.getSprite("player_crouch");
-        attackSprite = spriteManager.getSprite("player_attack");
-        airAttackSprite = spriteManager.getSprite("player_air_attack");
         jumpSprite = spriteManager.getSprite("player_jump");
+        dashSprite = spriteManager.getSprite("player_dash");
+        attackSprite = spriteManager.getSprite("player_attack");
         
         // Set initial sprite
         currentSprite = idleSprite;
         
-        // Player-specific physics properties
-        this.mass = 1.0F;
-        this.affectedByGravity = true;
-        
-        // Create initial collision shape
-        updateCollisionShape();
-    }
-    
-    /**
-     * Updates the collision shape based on current state.
-     */
-    private void updateCollisionShape() {
-        if (isRunning && currentSprite != null) {
-            // Get the actual sprite dimensions
-            int spriteWidth = currentSprite.getSize().width;
-            int spriteHeight = currentSprite.getSize().height;
-            
-            // Calculate the extension from the center to 3/5 of the sprite width
-            int halfBaseWidth = baseWidth / 2;
-            int threeFifthSpriteWidth = (int)(spriteWidth * 0.6) / 2;
-            
-            if (isFacingRight) {
-                // Extend to 3/5 of the sprite width to the right
-                int extension = threeFifthSpriteWidth - halfBaseWidth;
-                this.width = baseWidth + extension;
-                this.collisionShape = new AABB(
-                    (float)(position.getX() + extension / 2),
-                    (float)position.getY(),
-                    this.width,
-                    this.height
-                );
-            } else {
-                // Extend to 3/5 of the sprite width to the left
-                int extension = threeFifthSpriteWidth - halfBaseWidth;
-                this.width = baseWidth + extension;
-                this.collisionShape = new AABB(
-                    (float)(position.getX() - extension / 2),
-                    (float)position.getY(),
-                    this.width,
-                    this.height
-                );
-            }
-        } else {
-            // Normal hitbox when idle
-            this.width = baseWidth;
-            this.collisionShape = new AABB(position, this.width, this.height);
-        }
+        System.out.println("Player sprites loaded successfully");
     }
     
     @Override
     public void update(long deltaTime) {
-        // Reset ground status for this frame
+        // Reset ground status
         boolean wasOnGround = isOnGround;
         isOnGround = false;
         
-        // Process input and update sprite
+        // Handle input
         handleInput(deltaTime);
         
-        // Update current sprite animation
+        // Update sprite animation
         if (currentSprite != null) {
             currentSprite.update(deltaTime);
         }
         
-        // Apply physics limits
-        limitVelocity();
-        
-        // Base update (updates collision shape based on current state)
-        updateCollisionShape();
+        // Update physics
         super.update(deltaTime);
         
         // Reset jump ability when landing
@@ -158,67 +106,65 @@ public class PlayerEntity extends AbstractEntity {
             canJump = true;
         }
         
-        // Handle sprite lock timer
+        // Handle sprite locking
         if (isSpriteLocked && activeSpriteTimer >= currentSprite.getDuration().toMillis()) {
             activeSpriteTimer = 0;
             isSpriteLocked = false;
+            isDashing = false;
         }
+        
         if (isSpriteLocked) {
             activeSpriteTimer += deltaTime;
         }
     }
     
     /**
-     * Handles keyboard input and sprite selection.
+     * Handles player input
      */
     private void handleInput(long deltaTime) {
-        // Track movement state
-        boolean wasRunning = isRunning;
-        isRunning = false;
-        
-        // Convert deltaTime to seconds for more intuitive values
         double dt = deltaTime / 1000.0;
+        long currentTime = System.currentTimeMillis();
         
-        // Handle attack input
-        if (input.isKeyPressed(KeyEvent.VK_E) && input.isKeyPressed(KeyEvent.VK_DOWN)) {
+        // Handle dash
+        if (input.isKeyPressed(KeyEvent.VK_W) && !isDashing && currentTime - dashStartTime > 500) {
             if (!isSpriteLocked) {
-                currentSprite = airAttackSprite;
+                currentSprite = dashSprite;
                 isSpriteLocked = true;
+                isDashing = true;
+                dashStartTime = currentTime;
                 currentSprite.reset();
+                
+                // Apply dash velocity
+                double dashDirection = isFacingRight ? 1.0 : -1.0;
+                velocity.setX(DASH_SPEED * dashDirection);
             }
-        } else if (input.isKeyPressed(KeyEvent.VK_E)) {
+        }
+        
+        // Handle attack
+        else if (input.isKeyPressed(KeyEvent.VK_E)) {
             if (!isSpriteLocked) {
                 currentSprite = attackSprite;
                 isSpriteLocked = true;
                 currentSprite.reset();
             }
         }
-        // Handle crouch input
-        else if (input.isKeyPressed(KeyEvent.VK_DOWN)) {
-            if (!isSpriteLocked) {
-                currentSprite = crouchSprite;
-                velocity.setY(0);
-                isOnGround = true;
-                canJump = true;
-            }
-        }
-        // Handle movement input
+        
+        // Handle movement
         else if (input.isKeyPressed(KeyEvent.VK_RIGHT)) {
             if (!isSpriteLocked) {
                 currentSprite = runSprite;
                 velocity.add(MOVE_SPEED * 60 * dt, 0);
                 isFacingRight = true;
-                isRunning = true;
             }
         } else if (input.isKeyPressed(KeyEvent.VK_LEFT)) {
             if (!isSpriteLocked) {
                 currentSprite = runSprite;
                 velocity.add(-MOVE_SPEED * 60 * dt, 0);
                 isFacingRight = false;
-                isRunning = true;
             }
         }
-        // Handle idle state
+        
+        // Handle idle
         else {
             if (!isSpriteLocked) {
                 currentSprite = idleSprite;
@@ -226,46 +172,19 @@ public class PlayerEntity extends AbstractEntity {
             velocity.setX(0);
         }
         
-        // Check if we need to update hitbox due to state change
-        if (wasRunning != isRunning) {
-            updateCollisionShape();
-        }
-        
-        // Apply friction/air resistance when not actively moving
-        if (!isRunning) {
-            double frictionFactor = isOnGround ? GROUND_FRICTION : AIR_RESISTANCE;
-            velocity.setX(velocity.getX() * frictionFactor);
-        }
-        
-        // Handle jump input
-        long currentTime = System.currentTimeMillis();
-        if (input.isKeyPressed(KeyEvent.VK_SPACE) && 
-            (currentTime - lastJumpTime > 750)) {
-            velocity.setY(JUMP_FORCE);
+        // Handle jump
+        if (input.isKeyPressed(KeyEvent.VK_SPACE) && (currentTime - lastJumpTime > 750)) {
+            if (canJump) {
+                velocity.setY(JUMP_FORCE);
+                
+                if (!isSpriteLocked) {
+                    currentSprite = jumpSprite;
+                    currentSprite.reset();
+                }
+            }
+            
             lastJumpTime = currentTime;
             isOnGround = false;
-            
-            if (!isSpriteLocked) {
-                currentSprite = jumpSprite;
-                currentSprite.reset();
-            }
-        }
-    }
-    
-    /**
-     * Limits the player's velocity to prevent excessive speeds.
-     */
-    private void limitVelocity() {
-        // Limit horizontal speed
-        if (velocity.getX() > MAX_SPEED) {
-            velocity.setX(MAX_SPEED);
-        } else if (velocity.getX() < -MAX_SPEED) {
-            velocity.setX(-MAX_SPEED);
-        }
-        
-        // Small velocity threshold to prevent sliding
-        if (Math.abs(velocity.getX()) < 0.1) {
-            velocity.setX(0);
         }
     }
     
@@ -273,20 +192,11 @@ public class PlayerEntity extends AbstractEntity {
     public void render(Graphics2D g) {
         if (!visible || currentSprite == null) return;
         
-        // Calculate the sprite position (with feet offset adjustment)
-        int spriteX, spriteY;
+        // Calculate sprite position
+        int spriteX = (int)(position.getX() - currentSprite.getSize().width / 2);
+        int spriteY = (int)(position.getY() - currentSprite.getSize().height / 2);
         
-        // Base sprite position centered on the collision box
-        if (isFacingRight) {
-            spriteX = (int)(position.getX() - currentSprite.getSize().width / 2);
-            spriteY = (int)(position.getY() - currentSprite.getSize().height / 2 - FEET_OFFSET_Y); // Subtract to move the sprite up
-        } else {
-            // When facing left, maintain the same positioning
-            spriteX = (int)(position.getX() - currentSprite.getSize().width / 2);
-            spriteY = (int)(position.getY() - currentSprite.getSize().height / 2 - FEET_OFFSET_Y); // Subtract to move the sprite up
-        }
-        
-        // Handle sprite flipping
+        // Draw sprite (flip if facing left)
         if (isFacingRight) {
             g.drawImage(
                 currentSprite.getFrame(),
@@ -297,7 +207,6 @@ public class PlayerEntity extends AbstractEntity {
                 null
             );
         } else {
-            // Flip sprite horizontally
             g.drawImage(
                 currentSprite.getFrame(),
                 spriteX + currentSprite.getSize().width,
@@ -307,57 +216,18 @@ public class PlayerEntity extends AbstractEntity {
                 null
             );
         }
-        
-        // Debug: Draw collision box (optional - uncomment to see hitbox)
-        /*
-        g.setColor(new java.awt.Color(255, 0, 0, 80));
-        g.fillRect(
-            (int)(position.getX() - width / 2),
-            (int)(position.getY() - height / 2),
-            width,
-            height
-        );
-        
-        // Debug: Draw base hitbox for comparison
-        g.setColor(new java.awt.Color(0, 255, 0, 80));
-        g.drawRect(
-            (int)(position.getX() - baseWidth / 2),
-            (int)(position.getY() - baseHeight / 2),
-            baseWidth,
-            baseHeight
-        );
-        */
     }
     
     @Override
     public void onCollision(PhysicsObject other, Collision collision) {
-        // Check if we're standing on something (collision from below)
+        // Check if standing on something
         if (collision.getNormal().getY() < -0.5) {
             isOnGround = true;
         }
     }
     
-    /**
-     * Checks if the player is on the ground.
-     */
-    public boolean isOnGround() {
-        return isOnGround;
-    }
-    
-    /**
-     * Gets the current sprite.
-     */
-    public Sprite getCurrentSprite() {
-        return currentSprite;
-    }
-    
-    /**
-     * Sets the current sprite.
-     */
-    public void setCurrentSprite(Sprite sprite) {
-        this.currentSprite = sprite;
-        if (sprite != null) {
-            sprite.reset();
-        }
-    }
+    // Getters
+    public boolean isDashing() { return isDashing; }
+    public boolean isOnGround() { return isOnGround; }
+    public Sprite getCurrentSprite() { return currentSprite; }
 }

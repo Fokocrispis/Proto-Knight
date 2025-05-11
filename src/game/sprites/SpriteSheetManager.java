@@ -9,11 +9,14 @@ import java.util.Map;
 import game.resource.ResourceManager;
 
 /**
- * Manages sprite sheets and creates sprites for different animations.
+ * Simple SpriteSheetManager using the correct path structure
  */
 public class SpriteSheetManager {
     private final Map<String, BufferedImage> spriteSheets;
     private final Map<String, Sprite> sprites;
+    
+    // Correct path based on user's structure
+    private static final String SPRITE_PATH = "JoannaD'ArcIII_v1.9.2/Sprites/";
     
     public SpriteSheetManager() {
         this.spriteSheets = new HashMap<>();
@@ -21,12 +24,13 @@ public class SpriteSheetManager {
     }
     
     /**
-     * Loads a sprite sheet from resources.
+     * Loads a sprite sheet from resources
      */
     public BufferedImage loadSpriteSheet(String name, String fileName) {
         try {
-            BufferedImage spriteSheet = ResourceManager.getInstance().loadImage(fileName);
+            BufferedImage spriteSheet = ResourceManager.getInstance().loadImage(SPRITE_PATH + fileName);
             spriteSheets.put(name, spriteSheet);
+            System.out.println("Loaded sprite sheet: " + name);
             return spriteSheet;
         } catch (Exception e) {
             System.err.println("Failed to load sprite sheet: " + fileName);
@@ -36,7 +40,7 @@ public class SpriteSheetManager {
     }
     
     /**
-     * Creates a sprite from a loaded sprite sheet.
+     * Creates a sprite from a loaded sprite sheet
      */
     public Sprite createSprite(String spriteName, String spriteSheetName, 
                               Dimension frameSize, double scale, 
@@ -54,41 +58,72 @@ public class SpriteSheetManager {
     }
     
     /**
-     * Gets a sprite by name.
+     * Gets a sprite by name
      */
     public Sprite getSprite(String name) {
         return sprites.get(name);
     }
     
     /**
-     * Creates all sprites for the player entity.
+     * Creates all sprites for the player entity
      */
     public void createPlayerSprites() {
-        // Load the player sprite sheet
-        loadSpriteSheet("player", "player-spritesheet.png");
+        // Load the single comprehensive spritesheet
+        loadSpriteSheet("player", "JoannaD'ArcIII-Sheet#1.png");
         
         // Define frame size and scale
-        Dimension frameSize = new Dimension(50, 37);
-        double scale = 6.0;
+        Dimension frameSize = new Dimension(64, 64);
+        double scale = 3.0;
         
-        // Create sprites for different animations
+        // Create animations (estimate frame positions - adjust as needed)
         createSprite("player_idle", "player", frameSize, scale, 
-                    0, 4, Duration.ofSeconds(1));
+                    0, 7, Duration.ofSeconds(1));
         
         createSprite("player_run", "player", frameSize, scale, 
-                    8, 6, Duration.ofSeconds(1));
+                    7, 8, Duration.ofMillis(800));
         
-        createSprite("player_crouch", "player", frameSize, scale, 
-                    4, 4, Duration.ofSeconds(1));
+        createSprite("player_dash", "player", frameSize, scale, 
+                    15, 5, Duration.ofMillis(200));
         
         createSprite("player_attack", "player", frameSize, scale, 
-                    42, 4, Duration.ofMillis(350));
+                    20, 6, Duration.ofMillis(350));
         
         createSprite("player_air_attack", "player", frameSize, scale, 
-                    97, 4, Duration.ofMillis(450));
+                    26, 6, Duration.ofMillis(450));
         
-        // Add more sprites as needed
         createSprite("player_jump", "player", frameSize, scale, 
-                    14, 4, Duration.ofMillis(500));
+                    32, 5, Duration.ofMillis(500));
+        
+        createSprite("player_fall", "player", frameSize, scale, 
+                    37, 4, Duration.ofMillis(600));
+        
+        createSprite("player_crouch", "player", frameSize, scale, 
+                    41, 4, Duration.ofSeconds(1));
+        
+        createSprite("player_slide", "player", frameSize, scale, 
+                    45, 5, Duration.ofMillis(300));
+        
+        createSprite("player_hurt", "player", frameSize, scale, 
+                    50, 3, Duration.ofMillis(500));
+        
+        createSprite("player_death", "player", frameSize, scale, 
+                    53, 8, Duration.ofMillis(800));
+        
+        createSprite("player_wall_slide", "player", frameSize, scale, 
+                    61, 3, Duration.ofMillis(400));
+        
+        createSprite("player_wall_jump", "player", frameSize, scale, 
+                    64, 5, Duration.ofMillis(400));
+        
+        createSprite("player_climb", "player", frameSize, scale, 
+                    69, 4, Duration.ofMillis(600));
+    }
+    
+    /**
+     * Clears all cached sprites
+     */
+    public void clearCache() {
+        sprites.clear();
+        spriteSheets.clear();
     }
 }
