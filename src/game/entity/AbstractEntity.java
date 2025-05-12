@@ -1,16 +1,20 @@
 package game.entity;
 
 import java.awt.Graphics2D;
+import java.util.HashMap;
+import java.util.Map;
 
 import game.GameObject;
 import game.Vector2D;
+import game.entity.component.Component;
+import game.entity.component.Component.ComponentType;
 import game.physics.AABB;
 import game.physics.Collision;
 import game.physics.CollisionShape;
 import game.physics.PhysicsObject;
 
 /**
- * Enhanced base class for all game entities with improved physics support
+ * Base class for game entities with component support
  */
 public abstract class AbstractEntity implements GameObject, PhysicsObject {
     // Position and size
@@ -46,6 +50,9 @@ public abstract class AbstractEntity implements GameObject, PhysicsObject {
     protected String tag = "";
     protected String name = "";
     
+    // Component system
+    protected Map<ComponentType, Component> components = new HashMap<>();
+    
     /**
      * Creates a new entity with position and size.
      */
@@ -69,6 +76,11 @@ public abstract class AbstractEntity implements GameObject, PhysicsObject {
     public void update(long deltaTime) {
         if (!active) return;
         
+        // Update components first
+        for (Component component : components.values()) {
+            component.update(deltaTime);
+        }
+        
         // Update acceleration (if any forces are applied)
         velocity.add(acceleration.times(deltaTime / 1000.0));
         
@@ -90,10 +102,38 @@ public abstract class AbstractEntity implements GameObject, PhysicsObject {
         }
     }
     
-    @Override
-    public void render(Graphics2D g) {
-        // Base implementation does nothing, subclasses should override
+    /**
+     * Adds a component to this entity
+     */
+    public AbstractEntity addComponent(Component component) {
+        components.put(component.getType(), component);
+        return this;
     }
+    
+    /**
+     * Checks if the entity has a component of the specified type
+     */
+    public boolean hasComponent(ComponentType type) {
+        return components.containsKey(type);
+    }
+    
+    /**
+     * Gets a component by type
+     */
+    @SuppressWarnings("unchecked")
+    public <T extends Component> T getComponent(ComponentType type) {
+        return (T) components.get(type);
+    }
+    
+    /**
+     * Removes a component from this entity
+     */
+    public AbstractEntity removeComponent(ComponentType type) {
+        components.remove(type);
+        return this;
+    }
+    
+    // PhysicsObject implementation
     
     @Override
     public CollisionShape getCollisionShape() {
@@ -174,11 +214,6 @@ public abstract class AbstractEntity implements GameObject, PhysicsObject {
     }
     
     @Override
-    public void onCollision(PhysicsObject other, Collision collision) {
-        // Base implementation does nothing, subclasses should override
-    }
-    
-    @Override
     public float getFriction() {
         return friction;
     }
@@ -197,6 +232,8 @@ public abstract class AbstractEntity implements GameObject, PhysicsObject {
     public float getLinearDamping() {
         return linearDamping;
     }
+    
+    // Standard entity methods
     
     /**
      * Sets the position of this entity.
