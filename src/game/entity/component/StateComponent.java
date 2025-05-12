@@ -3,19 +3,19 @@ package game.entity.component;
 import java.util.HashMap;
 import java.util.Map;
 
-import game.entity.Entity;
+import game.entity.AbstractEntity;
 
 /**
  * Generic state component for entities
  */
 public class StateComponent implements Component {
-    protected Entity entity;
+    protected AbstractEntity entity;
     protected String currentState = "idle";
     protected String previousState = "idle";
     protected long stateChangeTime = 0;
     protected Map<String, Long> stateDurations = new HashMap<>();
     
-    public StateComponent(Entity entity) {
+    public StateComponent(AbstractEntity entity) {
         this.entity = entity;
     }
     

@@ -2,17 +2,17 @@ package game.entity.component;
 
 import java.awt.event.KeyEvent;
 
-import game.entity.Entity;
+import game.entity.AbstractEntity;
 import game.input.KeyboardInput;
 
 /**
  * Generic input component for entities
  */
 public class InputComponent implements Component {
-    protected Entity entity;
+    protected AbstractEntity entity;
     protected KeyboardInput input;
     
-    public InputComponent(Entity entity, KeyboardInput input) {
+    public InputComponent(AbstractEntity entity, KeyboardInput input) {
         this.entity = entity;
         this.input = input;
     }

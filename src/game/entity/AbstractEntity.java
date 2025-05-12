@@ -16,7 +16,7 @@ import game.physics.PhysicsObject;
 /**
  * Base class for game entities with component support
  */
-public abstract class AbstractEntity implements GameObject, PhysicsObject {
+public abstract class AbstractEntity implements GameObject, PhysicsObject, Entity {
     // Position and size
     protected Vector2D position;
     protected Vector2D velocity;
@@ -105,7 +105,8 @@ public abstract class AbstractEntity implements GameObject, PhysicsObject {
     /**
      * Adds a component to this entity
      */
-    public AbstractEntity addComponent(Component component) {
+    @Override
+    public Entity addComponent(Component component) {
         components.put(component.getType(), component);
         return this;
     }
@@ -113,6 +114,7 @@ public abstract class AbstractEntity implements GameObject, PhysicsObject {
     /**
      * Checks if the entity has a component of the specified type
      */
+    @Override
     public boolean hasComponent(ComponentType type) {
         return components.containsKey(type);
     }
@@ -120,6 +122,7 @@ public abstract class AbstractEntity implements GameObject, PhysicsObject {
     /**
      * Gets a component by type
      */
+    @Override
     @SuppressWarnings("unchecked")
     public <T extends Component> T getComponent(ComponentType type) {
         return (T) components.get(type);
@@ -128,7 +131,8 @@ public abstract class AbstractEntity implements GameObject, PhysicsObject {
     /**
      * Removes a component from this entity
      */
-    public AbstractEntity removeComponent(ComponentType type) {
+    @Override
+    public Entity removeComponent(ComponentType type) {
         components.remove(type);
         return this;
     }
@@ -233,6 +237,48 @@ public abstract class AbstractEntity implements GameObject, PhysicsObject {
         return linearDamping;
     }
     
+    // Entity interface implementation
+    @Override
+    public int getX() {
+        return (int)position.getX();
+    }
+    
+    @Override
+    public int getY() {
+        return (int)position.getY();
+    }
+    
+    @Override
+    public void setX(int x) {
+        position.setX(x);
+        if (collisionShape != null) {
+            collisionShape.setPosition(position);
+        }
+    }
+    
+    @Override
+    public void setY(int y) {
+        position.setY(y);
+        if (collisionShape != null) {
+            collisionShape.setPosition(position);
+        }
+    }
+    
+    @Override
+    public int getWidth() {
+        return width;
+    }
+    
+    @Override
+    public int getHeight() {
+        return height;
+    }
+    
+    @Override
+    public boolean isVisible() {
+        return visible;
+    }
+    
     // Standard entity methods
     
     /**
@@ -290,20 +336,6 @@ public abstract class AbstractEntity implements GameObject, PhysicsObject {
     }
     
     /**
-     * Gets the width of this entity.
-     */
-    public int getWidth() {
-        return width;
-    }
-    
-    /**
-     * Gets the height of this entity.
-     */
-    public int getHeight() {
-        return height;
-    }
-    
-    /**
      * Sets the size of this entity.
      */
     public void setSize(int width, int height) {
@@ -328,13 +360,6 @@ public abstract class AbstractEntity implements GameObject, PhysicsObject {
      */
     public void setActive(boolean active) {
         this.active = active;
-    }
-    
-    /**
-     * Checks if this entity is visible.
-     */
-    public boolean isVisible() {
-        return visible;
     }
     
     /**

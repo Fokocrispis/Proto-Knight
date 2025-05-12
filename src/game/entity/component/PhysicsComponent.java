@@ -1,13 +1,13 @@
 package game.entity.component;
 
 import game.Vector2D;
-import game.entity.Entity;
+import game.entity.AbstractEntity;
 
 /**
  * Generic physics component for entities
  */
 public class PhysicsComponent implements Component {
-    protected Entity entity;
+    protected AbstractEntity entity;
     
     // Physics properties
     protected Vector2D velocity = new Vector2D();
@@ -21,7 +21,7 @@ public class PhysicsComponent implements Component {
     protected float maxSpeedX = 1000f;
     protected float maxSpeedY = 1500f;
     
-    public PhysicsComponent(Entity entity) {
+    public PhysicsComponent(AbstractEntity entity) {
         this.entity = entity;
     }
     

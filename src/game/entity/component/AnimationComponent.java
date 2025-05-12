@@ -4,19 +4,19 @@ import java.awt.Graphics2D;
 import java.util.HashMap;
 import java.util.Map;
 
-import game.entity.Entity;
+import game.entity.AbstractEntity;
 import game.sprites.Sprite;
 
 /**
  * Generic animation component for entities
  */
 public class AnimationComponent implements Component {
-    protected Entity entity;
+    protected AbstractEntity entity;
     protected Sprite currentSprite;
     protected Map<String, Sprite> sprites = new HashMap<>();
     protected boolean flipHorizontal = false;
     
-    public AnimationComponent(Entity entity) {
+    public AnimationComponent(AbstractEntity entity) {
         this.entity = entity;
     }
     

@@ -16,10 +16,10 @@ public class BoxEntity extends AbstractEntity {
         super(x, y, width, height);
         this.color = color;
         
-        // You can optionally add a render component
-        // But keep the direct rendering for backward compatibility
+        // Create and add the render component properly
         RenderComponent renderer = new RenderComponent(this);
-        this.addComponent(renderer);
+        renderer.setMainColor(color);
+        addComponent(renderer);
     }
     
     public BoxEntity(double x, double y, int width, int height) {
@@ -72,6 +72,12 @@ public class BoxEntity extends AbstractEntity {
         // to change the color back after a short delay.
         // For now, we'll just lighten the color
         color = color.brighter();
+        
+        // Update the RenderComponent color if present
+        if (hasComponent(ComponentType.RENDER)) {
+            RenderComponent renderer = getComponent(ComponentType.RENDER);
+            renderer.setMainColor(color);
+        }
     }
     
     /**
@@ -90,5 +96,11 @@ public class BoxEntity extends AbstractEntity {
      */
     public void setColor(Color color) {
         this.color = color;
+        
+        // Update the RenderComponent color if present
+        if (hasComponent(ComponentType.RENDER)) {
+            RenderComponent renderer = getComponent(ComponentType.RENDER);
+            renderer.setMainColor(color);
+        }
     }
 }

@@ -69,9 +69,8 @@ public class BuffComponent implements Component {
         return new HashMap<>(activeBuffs);
     }
 
-	@Override
-	public ComponentType getType() {
-		// TODO Auto-generated method stub
-		return ComponentType.BUFF;
-	}
+    @Override
+    public ComponentType getType() {
+        return ComponentType.BUFF;
+    }
 }
