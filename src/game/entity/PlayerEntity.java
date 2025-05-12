@@ -15,7 +15,9 @@ import game.physics.Collision;
 import game.physics.PhysicsObject;
 import game.sprites.Sprite;
 import game.sprites.SpriteSheetManager;
+import game.sprites.AdjustableSequenceSprite;
 import game.sprites.LoopingSprite;
+import game.sprites.SequenceLoopingSprite;
 
 /**
  * PlayerEntity with properly aligned sprites and hitbox
@@ -509,110 +511,215 @@ public class PlayerEntity extends AbstractEntity {
         }
     }
     
-    private void updateSpriteForState() {
-        Sprite newSprite = null;
-        
-        // Choose sprite based on state and context
-        switch (currentState) {
-            case RUNNING:
-                if (isTurning) {
-                    newSprite = contextualSprites.get("turn_left"); // Will be flipped as needed
-                } else {
-                    newSprite = stateSprites.get(PlayerState.RUNNING);
-                }
-                break;
-                
-            case JUMPING:
-                if (movementContext == MovementContext.RUNNING) {
-                    newSprite = contextualSprites.get("jump_running");
-                }
-                if (newSprite == null) {
-                    newSprite = stateSprites.get(PlayerState.JUMPING);
-                }
-                break;
-                
-            case LANDING:
-                switch (movementContext) {
-                    case RUNNING:
-                        newSprite = contextualSprites.get("landing_running");
-                        break;
-                    case DASHING:
-                        newSprite = contextualSprites.get("landing_dashing");
-                        break;
-                    default:
-                        newSprite = contextualSprites.get("landing_normal");
-                        break;
-                }
-                break;
-                
-            case DASHING:
-                if (isDashing) {
-                    newSprite = contextualSprites.get("dash_start");
-                } else {
-                    newSprite = contextualSprites.get("dash_end");
-                }
-                if (newSprite == null) {
-                    newSprite = stateSprites.get(PlayerState.DASHING);
-                }
-                break;
-                
-            default:
-                newSprite = stateSprites.get(currentState);
-                break;
-        }
-        
-        // Update sprite if changed
-        if (newSprite != null && newSprite != currentSprite) {
-            currentSprite = newSprite;
-            if (currentSprite != null) {
-                currentSprite.reset();
-            }
-        }
-    }
-    
-    @Override
-    public void render(Graphics2D g) {
-        if (!visible || currentSprite == null) return;
-        
-        // SPRITE OFFSET ADJUSTMENT - Modify these values
-        int SPRITE_OFFSET_X = 0;  // Adjust this for horizontal offset
-        int SPRITE_OFFSET_Y = 50 ;  // Adjust this for vertical offset
-        
-        // Calculate sprite rendering position to align with hitbox
-        // The sprite is larger than the hitbox, so we need to offset it properly
-        
-        // Sprite width/height includes scaling
-        int renderedWidth = currentSprite.getSize().width;
-        int renderedHeight = currentSprite.getSize().height;
-        
-        // Calculate sprite position to align the bottom with the hitbox bottom
-        int spriteX = (int)(position.getX() - renderedWidth / 2.0) + SPRITE_OFFSET_X;
-        int spriteY = (int)(position.getY() - HITBOX_HEIGHT / 2.0 - (renderedHeight - HITBOX_HEIGHT)) + SPRITE_OFFSET_Y;
-        
-        // Draw sprite (flipped if facing left)
-        if (isFacingRight) {
-            g.drawImage(currentSprite.getFrame(), 
-                       spriteX, spriteY, 
-                       renderedWidth, renderedHeight, null);
-        } else {
-            g.drawImage(currentSprite.getFrame(), 
-                       spriteX + renderedWidth, spriteY,
-                       -renderedWidth, renderedHeight, null);
-        }
-        
-        // Draw health and mana bars (also offset if needed)
-        drawHealthManaBar(g);
-        
-        // Draw buff effects
-        renderBuffEffects(g);
-        
-        // Draw hook line if hooking
-        if (isHooking && hookTarget != null) {
-            g.setColor(Color.CYAN);
-            g.drawLine((int)position.getX(), (int)position.getY(), 
-                      (int)hookTarget.getX(), (int)hookTarget.getY());
-        }
-    }
+ // This is a partial update to the PlayerEntity class to handle adjustable sprites
+ // Add these methods to your PlayerEntity class
+
+ /**
+  * Renders the current sprite, handling both sprite sheet and adjustable sequence sprites
+  */
+ public void render(Graphics2D g) {
+     if (!visible || currentSprite == null) return;
+     
+     // Default sprite offset adjustment (used for sprite sheet sprites)
+     int SPRITE_OFFSET_X = 0;
+     int SPRITE_OFFSET_Y = 50;
+     
+     // Get sprite dimensions
+     int renderedWidth = currentSprite.getSize().width;
+     int renderedHeight = currentSprite.getSize().height;
+     
+     // Calculate sprite position - this depends on the sprite type
+     int spriteX, spriteY;
+     
+     if (currentSprite instanceof AdjustableSequenceSprite) {
+         // Use the built-in positioning for adjustable sprites
+         AdjustableSequenceSprite adjustableSprite = (AdjustableSequenceSprite) currentSprite;
+         spriteX = adjustableSprite.getRenderX(position.getX());
+         spriteY = adjustableSprite.getRenderY(position.getY(), HITBOX_HEIGHT);
+     } else {
+         // Standard positioning for regular sprites
+         spriteX = (int)(position.getX() - renderedWidth / 2.0) + SPRITE_OFFSET_X;
+         spriteY = (int)(position.getY() - HITBOX_HEIGHT / 2.0 - (renderedHeight - HITBOX_HEIGHT)) + SPRITE_OFFSET_Y;
+     }
+     
+     // Draw sprite (flipped if facing left)
+     if (isFacingRight) {
+         g.drawImage(currentSprite.getFrame(), 
+                    spriteX, spriteY, 
+                    renderedWidth, renderedHeight, null);
+     } else {
+         g.drawImage(currentSprite.getFrame(), 
+                    spriteX + renderedWidth, spriteY,
+                    -renderedWidth, renderedHeight, null);
+     }
+     
+     // Draw health and mana bars
+     drawHealthManaBar(g);
+     
+     // Draw buff effects
+     renderBuffEffects(g);
+     
+     // Draw hook line if hooking
+     if (isHooking && hookTarget != null) {
+         g.setColor(Color.CYAN);
+         g.drawLine((int)position.getX(), (int)position.getY(), 
+                   (int)hookTarget.getX(), (int)hookTarget.getY());
+     }
+     
+     // Draw debug info when enabled
+     if (debugRender) {
+         renderDebugInfo(g);
+     }
+ }
+
+ /**
+  * Renders debug information about sprite positioning
+  */
+ private void renderDebugInfo(Graphics2D g) {
+     // Draw hitbox
+     g.setColor(new Color(255, 0, 0, 128));
+     g.drawRect(
+         (int)(position.getX() - HITBOX_WIDTH / 2),
+         (int)(position.getY() - HITBOX_HEIGHT / 2),
+         HITBOX_WIDTH, 
+         HITBOX_HEIGHT
+     );
+     
+     // Draw center point
+     g.setColor(Color.YELLOW);
+     g.fillOval((int)position.getX() - 2, (int)position.getY() - 2, 4, 4);
+     
+     // Display sprite info
+     g.setColor(Color.WHITE);
+     String spriteInfo = "Unknown";
+     
+     if (currentSprite instanceof AdjustableSequenceSprite) {
+         AdjustableSequenceSprite sprite = (AdjustableSequenceSprite) currentSprite;
+         spriteInfo = String.format("AdjustableSequence: %dx%d, offset: %d,%d",
+             sprite.getSize().width, sprite.getSize().height,
+             sprite.getOffsetX(), sprite.getOffsetY());
+     } else if (currentSprite != null) {
+         spriteInfo = String.format("Standard: %dx%d", 
+             currentSprite.getSize().width, currentSprite.getSize().height);
+     }
+     
+     g.drawString(spriteInfo, (int)position.getX() - 80, (int)position.getY() - 100);
+ }
+
+ /**
+  * Updates the sprite animation state, handling all sprite types
+  */
+ private void updateSprite(long deltaTime) {
+     if (currentSprite != null) {
+         currentSprite.update(deltaTime);
+         
+         // Handle non-looping sprites
+         if (currentSprite instanceof LoopingSprite) {
+             LoopingSprite loopingSprite = (LoopingSprite) currentSprite;
+             if (!loopingSprite.isLooping() && loopingSprite.hasCompleted()) {
+                 handleAnimationComplete();
+             }
+         } else if (currentSprite instanceof AdjustableSequenceSprite) {
+             AdjustableSequenceSprite adjustableSprite = (AdjustableSequenceSprite) currentSprite;
+             if (!adjustableSprite.isLooping() && adjustableSprite.hasCompleted()) {
+                 handleAnimationComplete();
+             }
+         }
+     }
+ }
+
+ /**
+  * Handles state transitions when non-looping animations complete
+  */
+ private void handleAnimationComplete() {
+     if (currentState == PlayerState.LANDING) {
+         currentState = PlayerState.IDLE;
+         movementContext = MovementContext.NORMAL;
+         updateSpriteForState();
+     } else if (currentState == PlayerState.ATTACKING) {
+         isAttacking = false;
+         currentState = PlayerState.IDLE;
+         updateSpriteForState();
+     }
+ }
+
+ /**
+  * Updates the sprite based on player state, supporting all sprite types
+  */
+ private void updateSpriteForState() {
+     Sprite newSprite = null;
+     
+     // Choose sprite based on state and context
+     switch (currentState) {
+         case RUNNING:
+             if (isTurning) {
+                 newSprite = contextualSprites.get("turn_left"); // Will be flipped as needed
+             } else {
+                 newSprite = stateSprites.get(PlayerState.RUNNING);
+             }
+             break;
+             
+         case JUMPING:
+             if (movementContext == MovementContext.RUNNING) {
+                 newSprite = contextualSprites.get("jump_running");
+             }
+             if (newSprite == null) {
+                 newSprite = stateSprites.get(PlayerState.JUMPING);
+             }
+             break;
+             
+         case LANDING:
+             switch (movementContext) {
+                 case RUNNING:
+                     newSprite = contextualSprites.get("landing_running");
+                     break;
+                 case DASHING:
+                     newSprite = contextualSprites.get("landing_dashing");
+                     break;
+                 default:
+                     newSprite = contextualSprites.get("landing_normal");
+                     break;
+             }
+             break;
+             
+         case DASHING:
+             if (isDashing) {
+                 newSprite = contextualSprites.get("dash_start");
+             } else {
+                 newSprite = contextualSprites.get("dash_end");
+             }
+             if (newSprite == null) {
+                 newSprite = stateSprites.get(PlayerState.DASHING);
+             }
+             break;
+             
+         default:
+             newSprite = stateSprites.get(currentState);
+             break;
+     }
+     
+     // Update sprite if changed
+     if (newSprite != null && newSprite != currentSprite) {
+         currentSprite = newSprite;
+         
+         // Reset the sprite animation
+         if (currentSprite instanceof LoopingSprite) {
+             ((LoopingSprite) currentSprite).reset();
+         } else if (currentSprite instanceof AdjustableSequenceSprite) {
+             ((AdjustableSequenceSprite) currentSprite).reset();
+         } else if (currentSprite != null) {
+             currentSprite.reset();
+         }
+     }
+ }
+
+ // Add this field to PlayerEntity class
+ private boolean debugRender = false;
+
+ // Add this method to PlayerEntity class to toggle debug rendering
+ public void toggleDebugRender() {
+     debugRender = !debugRender;
+ }
     
     @Override
     public void onCollision(PhysicsObject other, Collision collision) {
@@ -771,29 +878,6 @@ public class PlayerEntity extends AbstractEntity {
         if (health > MAX_HEALTH) health = MAX_HEALTH;
         
         System.out.println("Casting Heal! Health: " + health);
-    }
-    
-    private void updateSprite(long deltaTime) {
-        if (currentSprite != null) {
-            currentSprite.update(deltaTime);
-            
-            // Handle non-looping sprites
-            if (currentSprite instanceof LoopingSprite) {
-                LoopingSprite loopingSprite = (LoopingSprite) currentSprite;
-                if (!loopingSprite.isLooping() && loopingSprite.hasCompleted()) {
-                    // Transition to appropriate state after animation completes
-                    if (currentState == PlayerState.LANDING) {
-                        currentState = PlayerState.IDLE;
-                        movementContext = MovementContext.NORMAL;
-                        updateSpriteForState();
-                    } else if (currentState == PlayerState.ATTACKING) {
-                        isAttacking = false;
-                        currentState = PlayerState.IDLE;
-                        updateSpriteForState();
-                    }
-                }
-            }
-        }
     }
     
     private void drawHealthManaBar(Graphics2D g) {

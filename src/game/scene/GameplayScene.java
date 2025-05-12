@@ -172,21 +172,21 @@ public class GameplayScene extends AbstractScene {
         backgroundLayers[1] = new BackgroundLayer(
             "background_layer_1.png",
             BACKGROUND_TILE_WIDTH,
-            0.2  // Very slow parallax
+            1.8  // Very slow parallax
         );
         
         // Layer 2: Middle background
         backgroundLayers[2] = new BackgroundLayer(
             "background_layer_2.png",
             BACKGROUND_TILE_WIDTH,
-            0.5   // Medium parallax
+            1.4   // Medium parallax
         );
         
         // Layer 3: Near background
         backgroundLayers[3] = new BackgroundLayer(
             "background_layer_3.png",
             BACKGROUND_TILE_WIDTH,
-            0.8   // Faster parallax
+            1   // Faster parallax
         );
     }
     

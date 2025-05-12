@@ -10,6 +10,7 @@ import game.camera.Camera;
 
 /**
  * Abstract base class for scenes that provides common functionality.
+ * Updated to expose game objects for debugging.
  */
 public abstract class AbstractScene implements Scene {
     protected final Game game;
@@ -145,5 +146,15 @@ public abstract class AbstractScene implements Scene {
     @Override
     public boolean isInitialized() {
         return initialized;
+    }
+    
+    /**
+     * Gets all game objects in this scene.
+     * Added for debugging and accessing objects.
+     * 
+     * @return List of game objects
+     */
+    public List<GameObject> getGameObjects() {
+        return new ArrayList<>(gameObjects);
     }
 }

@@ -18,7 +18,7 @@ import game.physics.PhysicsSystem;
 
 /**
  * Main game class that sets up the window and manages the game loop
- * Updated with enhanced physics system
+ * Updated with enhanced physics system and overridable hook methods
  */
 public class Game {
     // Window settings
@@ -126,6 +126,19 @@ public class Game {
         
         // Update input state (must be called after all updates)
         keyboardInput.update();
+        
+        // Call the hook for custom update logic in subclasses
+        processCustomUpdates(deltaTime);
+    }
+    
+    /**
+     * Hook method for subclasses to add custom update logic.
+     * This is called after the main update steps are complete.
+     * 
+     * @param deltaTime Time elapsed since last update in milliseconds
+     */
+    protected void processCustomUpdates(long deltaTime) {
+        // To be overridden by subclasses
     }
     
     /**
@@ -153,6 +166,19 @@ public class Game {
         if (SHOULD_PRINT_FPS) {
             renderDebugInfo(g);
         }
+        
+        // Call the hook for custom rendering
+        processCustomRendering(g);
+    }
+    
+    /**
+     * Hook method for subclasses to add custom rendering.
+     * This is called after all standard rendering is complete.
+     * 
+     * @param g The graphics context
+     */
+    protected void processCustomRendering(Graphics2D g) {
+        // To be overridden by subclasses
     }
     
     /**

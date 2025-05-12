@@ -9,77 +9,82 @@ import java.util.Map;
 import game.resource.ResourceManager;
 
 /**
- * Updated sprite sheet manager with additional animations for dash, landing, and turning
+ * Updated SpriteSheetManager with simpler integration for sequence sprites
  */
 public class SpriteSheetManager {
     private final Map<String, BufferedImage> spriteSheets;
     private final Map<String, Sprite> sprites;
-    private final Map<String, SpriteConfig> configurations;
+    private final SpriteSequenceManager sequenceManager;
     
     private static final String SPRITE_PATH = "JoannaD'ArcIII_v1.9.2/Sprites/";
     
     public SpriteSheetManager() {
         this.spriteSheets = new HashMap<>();
         this.sprites = new HashMap<>();
-        this.configurations = new HashMap<>();
-        
-        // Initialize sprite configurations
-        setupSpriteConfigurations();
+        this.sequenceManager = new SpriteSequenceManager();
     }
     
     /**
-     * Setup all sprite configurations with improved animation mappings
+     * Create player sprites with walking animation using sequence approach
      */
-    private void setupSpriteConfigurations() {
-        // Main player sprite sheet
-        SpriteConfig playerConfig = new SpriteConfig("player", "JoannaD'ArcIII-Sheet#1.png", 
-                                                    new Dimension(98, 66), 3.0);
+    public void createPlayerSprites() {
+        // Load the old sprite sheet for non-walking animations
+        loadSpriteSheet("player", "JoannaD'ArcIII-Sheet#1.png");
         
-        // Add animations with corrected frame counts
-        playerConfig.addAnimation("idle", 0, 6, 1000, true);
-        playerConfig.addAnimation("walk", 37, 23, 850, true);
-        playerConfig.addAnimation("run_start", 74, 9, 600, false);
-        playerConfig.addAnimation("run", 80, 4, 400, true);
-        playerConfig.addAnimation("run_stop", 95, 6, 300, false);
-        playerConfig.addAnimation("run_turning", 84, 7, 550, false); // Reuse run frames for turning
-        playerConfig.addAnimation("jump", 111, 6, 500, false);
-        playerConfig.addAnimation("fall", 117, 4, 600, true);
-        playerConfig.addAnimation("land_quick", 122, 2, 150, false);
-        playerConfig.addAnimation("land_full", 122, 4, 400, false);
-        playerConfig.addAnimation("roll", 222, 8, 400, false);
-        playerConfig.addAnimation("dash", 259, 6, 250, false);
-        playerConfig.addAnimation("block", 296, 3, 300, true);
-        playerConfig.addAnimation("hurt", 330, 3, 500, false);
+        // Define frame size and scale
+        Dimension frameSize = new Dimension(98, 66);
+        double scale = 3.0;
         
-        // If you have separate dash/attack sheets, add them here
-        if (loadSpriteSheet("attacks", "Attacks/JoannaD'ArcIII-Sheet#1.png")) {
-            SpriteConfig attackConfig = new SpriteConfig("attacks", "Attacks/JoannaD'ArcIII-Sheet#1.png",
-                                                        new Dimension(98, 66), 3.0);
-            attackConfig.addAnimation("air_attack", 0, 8, 400, false);
-            attackConfig.addAnimation("combo_1", 8, 6, 350, false);
-            attackConfig.addAnimation("combo_2", 14, 7, 400, false);
-            attackConfig.addAnimation("combo_3", 21, 8, 450, false);
-            registerConfiguration(attackConfig);
+        // Create standard animations from sprite sheet (except walking)
+        createSprite("player_idle", "player", frameSize, scale, 0, 6, Duration.ofMillis(1000));
+        createSprite("player_run", "player", frameSize, scale, 80, 4, Duration.ofMillis(400));
+        createSprite("player_jump", "player", frameSize, scale, 111, 6, Duration.ofMillis(500));
+        createSprite("player_fall", "player", frameSize, scale, 117, 4, Duration.ofMillis(600));
+        
+        // Add any other sprite sheet animations you need
+        
+        try {
+            // Load the walking sprite from sequences
+            Sprite walkingSprite = sequenceManager.getSprite("player_walk");
+            
+            // If sprite doesn't exist yet, create it
+            if (walkingSprite == null) {
+                // Define walking animation parameters
+                Dimension walkingFrameSize = new Dimension(64, 64);  // Source size
+                Dimension walkingDisplaySize = new Dimension(190, 182);  // Target size
+                int walkingOffsetX = 0;  // Horizontal offset
+                int walkingOffsetY = 25;  // Vertical offset
+                
+                // Load the walking animation
+                walkingSprite = sequenceManager.loadSpriteSequence(
+                    "player_walk",         // Animation name
+                    "Walk/Walking",        // Path to frames
+                    "Walking",             // Base filename
+                    18,                    // 18 frames
+                    walkingFrameSize,      // Source frame size
+                    walkingDisplaySize,    // Display size
+                    walkingOffsetX,        // X offset
+                    walkingOffsetY,        // Y offset
+                    Duration.ofMillis(850), // Duration
+                    true                   // Looping animation
+                );
+            }
+            
+            // Add the walking sprite to our sprite collection
+            if (walkingSprite != null) {
+                sprites.put("player_walk", walkingSprite);
+                System.out.println("Successfully integrated walking animation from sequence");
+            } else {
+                // Fallback to old sheet-based animation if sequence loading fails
+                System.err.println("Walking sprite was null! Using fallback.");
+                createSprite("player_walk", "player", frameSize, scale, 37, 23, Duration.ofMillis(850));
+            }
+        } catch (Exception e) {
+            System.err.println("Error loading walking animation: " + e.getMessage());
+            e.printStackTrace();
+            // Fallback to old animation
+            createSprite("player_walk", "player", frameSize, scale, 37, 23, Duration.ofMillis(850));
         }
-        
-        // Register player configuration
-        registerConfiguration(playerConfig);
-    }
-    
-    /**
-     * Register a sprite configuration and load sprites
-     */
-    private void registerConfiguration(SpriteConfig config) {
-        configurations.put(config.getName(), config);
-        
-        // Load the sprite sheet
-        if (!loadSpriteSheet(config.getName(), config.getFileName())) {
-            System.err.println("Failed to load sprite sheet: " + config.getFileName());
-            return;
-        }
-        
-        // Create all sprites for this configuration
-        createSpritesFromConfig(config);
     }
     
     /**
@@ -90,7 +95,7 @@ public class SpriteSheetManager {
             BufferedImage spriteSheet = ResourceManager.getInstance().loadImage(SPRITE_PATH + fileName);
             if (spriteSheet != null) {
                 spriteSheets.put(name, spriteSheet);
-                System.out.println("Loaded sprite sheet: " + name + " (" + spriteSheet.getWidth() + "x" + spriteSheet.getHeight() + ")");
+                System.out.println("Loaded sprite sheet: " + name);
                 return true;
             }
         } catch (Exception e) {
@@ -98,227 +103,48 @@ public class SpriteSheetManager {
             e.printStackTrace();
         }
         
-        // Try alternative paths if initial load fails
-        try {
-            BufferedImage spriteSheet = ResourceManager.getInstance().loadImage("Sprites/" + fileName);
-            if (spriteSheet != null) {
-                spriteSheets.put(name, spriteSheet);
-                System.out.println("Loaded sprite sheet (alt path): " + name);
-                return true;
-            }
-        } catch (Exception e) {
-            // Continue to next attempt
-        }
-        
-        try {
-            BufferedImage spriteSheet = ResourceManager.getInstance().loadImage(fileName);
-            if (spriteSheet != null) {
-                spriteSheets.put(name, spriteSheet);
-                System.out.println("Loaded sprite sheet (direct): " + name);
-                return true;
-            }
-        } catch (Exception e) {
-            System.err.println("Failed to load sprite sheet with all paths: " + fileName);
-        }
-        
         return false;
     }
     
     /**
-     * Create sprites from a configuration with proper bounds checking
+     * Create a sprite from a sprite sheet
      */
-    private void createSpritesFromConfig(SpriteConfig config) {
-        BufferedImage sheet = spriteSheets.get(config.getName());
-        if (sheet == null) return;
+    public Sprite createSprite(String name, String sheetName, Dimension frameSize, 
+                               double scale, int firstFrame, int frameCount, 
+                               Duration duration) {
         
-        // Calculate maximum frames available
-        int maxColumns = sheet.getWidth() / config.getFrameSize().width;
-        int maxRows = sheet.getHeight() / config.getFrameSize().height;
-        int maxFrames = maxColumns * maxRows;
-        
-        for (Map.Entry<String, AnimationData> entry : config.getAnimations().entrySet()) {
-            String animName = entry.getKey();
-            AnimationData anim = entry.getValue();
-            
-            // Validate frame indices
-            int lastFrame = anim.getFirstFrame() + anim.getFrameCount() - 1;
-            if (lastFrame >= maxFrames) {
-                System.err.println("Warning: Animation '" + animName + "' exceeds sprite sheet bounds!");
-                System.err.println("  Requested: " + (anim.getFirstFrame() + anim.getFrameCount()) + " frames");
-                System.err.println("  Available: " + maxFrames + " frames");
-                
-                // Adjust frame count to fit
-                int adjustedFrameCount = Math.max(1, maxFrames - anim.getFirstFrame());
-                System.err.println("  Adjusted to: " + adjustedFrameCount + " frames");
-                
-                // Create adjusted animation data
-                anim = new AnimationData(
-                    anim.getName(),
-                    anim.getFirstFrame(),
-                    adjustedFrameCount,
-                    anim.getDuration(),
-                    anim.isLooping()
-                );
-            }
-            
-            String spriteName = config.getName() + "_" + animName;
-            
-            // Create the appropriate sprite type based on looping
-            Sprite sprite;
-            if (anim.isLooping()) {
-                sprite = new LoopingSprite(
-                    spriteName,
-                    sheet,
-                    config.getFrameSize(),
-                    config.getScale(),
-                    config.getScale(),
-                    anim.getFirstFrame(),
-                    anim.getFrameCount(),
-                    Duration.ofMillis(anim.getDuration()),
-                    true
-                );
-            } else {
-                sprite = new Sprite(
-                    spriteName,
-                    sheet,
-                    config.getFrameSize(),
-                    config.getScale(),
-                    anim.getFirstFrame(),
-                    anim.getFrameCount(),
-                    Duration.ofMillis(anim.getDuration())
-                );
-            }
-            
-            sprites.put(spriteName, sprite);
-            System.out.println("Created sprite: " + spriteName);
+        BufferedImage sheet = spriteSheets.get(sheetName);
+        if (sheet == null) {
+            System.err.println("Sprite sheet not found: " + sheetName);
+            return null;
         }
+        
+        Sprite sprite = new Sprite(name, sheet, frameSize, scale, firstFrame, 
+                                  frameCount, duration);
+        sprites.put(name, sprite);
+        
+        return sprite;
     }
     
     /**
      * Get a sprite by name
      */
     public Sprite getSprite(String name) {
-        Sprite sprite = sprites.get(name);
-        if (sprite == null) {
-            System.err.println("Warning: Sprite not found: " + name);
-            // Return idle sprite as fallback
-            return sprites.get("player_idle");
-        }
-        return sprite;
+        return sprites.get(name);
     }
     
     /**
-     * Get all sprites from a specific configuration
-     */
-    public Map<String, Sprite> getSpritesForConfig(String configName) {
-        Map<String, Sprite> configSprites = new HashMap<>();
-        String prefix = configName + "_";
-        
-        for (Map.Entry<String, Sprite> entry : sprites.entrySet()) {
-            if (entry.getKey().startsWith(prefix)) {
-                configSprites.put(entry.getKey().substring(prefix.length()), entry.getValue());
-            }
-        }
-        
-        return configSprites;
-    }
-    
-    /**
-     * Create all player sprites (for backwards compatibility)
-     */
-    public void createPlayerSprites() {
-        // Sprites are automatically created when configurations are registered
-        // This method is kept for backwards compatibility
-        System.out.println("Player sprites created successfully");
-    }
-    
-    /**
-     * Clear all caches
+     * Clear cached sprites and sheets
      */
     public void clearCache() {
         sprites.clear();
         spriteSheets.clear();
-        configurations.clear();
     }
     
     /**
-     * Get all available sprite names
+     * Get the sequence manager for direct access
      */
-    public String[] getAvailableSprites() {
-        return sprites.keySet().toArray(new String[0]);
+    public SpriteSequenceManager getSequenceManager() {
+        return sequenceManager;
     }
-    
-    /**
-     * Debug method to print all loaded sprites
-     */
-    public void printLoadedSprites() {
-        System.out.println("=== Loaded Sprites ===");
-        for (String spriteName : sprites.keySet()) {
-            Sprite sprite = sprites.get(spriteName);
-            System.out.println(spriteName + " - Frames: " + sprite.getTotalFrames() + 
-                             ", Duration: " + sprite.getDuration().toMillis() + "ms");
-        }
-        System.out.println("====================");
-    }
-}
-
-/**
- * Configuration class for a sprite sheet
- */
-class SpriteConfig {
-    private final String name;
-    private final String fileName;
-    private final Dimension frameSize;
-    private final double scale;
-    private final Map<String, AnimationData> animations;
-    
-    public SpriteConfig(String name, String fileName, Dimension frameSize, double scale) {
-        this.name = name;
-        this.fileName = fileName;
-        this.frameSize = frameSize;
-        this.scale = scale;
-        this.animations = new HashMap<>();
-    }
-    
-    /**
-     * Add an animation to this configuration
-     */
-    public SpriteConfig addAnimation(String name, int firstFrame, int frameCount, 
-                                   long duration, boolean looping) {
-        animations.put(name, new AnimationData(name, firstFrame, frameCount, duration, looping));
-        return this; // For method chaining
-    }
-    
-    // Getters
-    public String getName() { return name; }
-    public String getFileName() { return fileName; }
-    public Dimension getFrameSize() { return frameSize; }
-    public double getScale() { return scale; }
-    public Map<String, AnimationData> getAnimations() { return animations; }
-}
-
-/**
- * Data class for animation configuration
- */
-class AnimationData {
-    private final String name;
-    private final int firstFrame;
-    private final int frameCount;
-    private final long duration;
-    private final boolean looping;
-    
-    public AnimationData(String name, int firstFrame, int frameCount, long duration, boolean looping) {
-        this.name = name;
-        this.firstFrame = firstFrame;
-        this.frameCount = frameCount;
-        this.duration = duration;
-        this.looping = looping;
-    }
-    
-    // Getters
-    public String getName() { return name; }
-    public int getFirstFrame() { return firstFrame; }
-    public int getFrameCount() { return frameCount; }
-    public long getDuration() { return duration; }
-    public boolean isLooping() { return looping; }
 }
