@@ -50,6 +50,19 @@ public class SpriteSequenceManager {
             true
         );
         
+        loadSpriteSequence(
+                "player_slide",
+                "Slide/SlideFrame",
+                "Slide",
+                10,
+                defaultFrameSize,
+                displaySize,
+                0,
+                0,
+                Duration.ofMillis(1000),
+                true
+            );
+        
         // Add more animations as needed
         // For example:
         /*

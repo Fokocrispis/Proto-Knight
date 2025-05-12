@@ -1,8 +1,6 @@
+// src/game/entity/PlayerState.java
 package game.entity;
 
-/**
- * Enum for different player states
- */
 public enum PlayerState {
     IDLE,
     WALKING,
@@ -11,6 +9,7 @@ public enum PlayerState {
     FALLING,
     LANDING,
     DASHING,
+    SLIDING,
     HOOKING,
     TELEPORTING,
     ATTACKING, 
