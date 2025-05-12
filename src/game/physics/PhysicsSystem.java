@@ -18,7 +18,7 @@ public class PhysicsSystem {
     private static final double MIN_VELOCITY = 0.1;
     
     private final List<PhysicsObject> physicsObjects;
-    private final Vector2D gravity;
+    public static Vector2D gravity;
     private final float worldWidth;
     private final float worldHeight;
     

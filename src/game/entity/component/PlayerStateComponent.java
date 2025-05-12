@@ -9,17 +9,20 @@ public class PlayerStateComponent implements Component {
     
     // Timing parameters
     private static final long LANDING_ANIMATION_DURATION = 300;
+    private static final long CROUCH_TRANSITION_DURATION = 150;
     
     // States
     private PlayerState previousState = PlayerState.IDLE;
     private MovementContext previousMovementContext = MovementContext.NORMAL;
     private boolean wasRunning = false;
     private boolean wasDashing = false;
+    private boolean wasCrouching = false;
     
     // Times
     private long lastGroundTime = 0;
     private long landingStartTime = 0;
     private long stateChangeTime = 0;
+    private long crouchStartTime = 0;
     
     public PlayerStateComponent(PlayerEntity player) {
         this.player = player;
@@ -34,6 +37,7 @@ public class PlayerStateComponent implements Component {
         previousMovementContext = player.getMovementContext();
         wasRunning = (player.getCurrentState() == PlayerState.RUNNING);
         wasDashing = player.isDashing();
+        wasCrouching = player.isCrouching();
         
         // Track ground state
         boolean wasOnGround = player.isOnGround();
@@ -90,7 +94,12 @@ public class PlayerStateComponent implements Component {
         // Handle special states first - these take priority
         if (player.isSliding()) {
             newState = PlayerState.SLIDING;
+            // Ensure we don't confuse sliding with crouching
+            player.setCrouching(false);
         } else if (player.isDashing()) {
+            // Fix: clear crouching state during dash - dash takes priority
+            player.setCrouching(false);
+            
             if (!player.isOnGround() && velocityY > 0) {
                 // Falling while dashing
                 newState = PlayerState.FALLING;
@@ -108,11 +117,8 @@ public class PlayerStateComponent implements Component {
             // Keep landing state until animation completes
             if (currentTime - landingStartTime > LANDING_ANIMATION_DURATION) {
                 if (player.isCrouching()) {
-                    if (velocityX < 5) {
-                        newState = PlayerState.IDLE;
-                    } else {
-                        newState = PlayerState.WALKING;
-                    }
+                    // FIX: When landing into crouch, stay in IDLE
+                    newState = PlayerState.IDLE;
                     player.setMovementContext(MovementContext.CROUCHING);
                 } else if (velocityX < 5) {
                     newState = PlayerState.IDLE;
@@ -132,13 +138,18 @@ public class PlayerStateComponent implements Component {
             // Normal state determination
             if (player.isOnGround()) {
                 if (player.isCrouching()) {
-                    // Maintain current state but with crouching context
+                    // FIX: Use a dedicated crouching state when not moving
                     if (velocityX < 5) {
-                        newState = PlayerState.IDLE;
+                        newState = PlayerState.IDLE; // Will be rendered as crouching idle
                     } else {
-                        newState = PlayerState.WALKING;
+                        newState = PlayerState.WALKING; // Will be rendered as crouching walk
                     }
                     player.setMovementContext(MovementContext.CROUCHING);
+                    
+                    // Record when we started crouching if this is new
+                    if (!wasCrouching) {
+                        crouchStartTime = currentTime;
+                    }
                 } else if (velocityX < 5) {
                     newState = PlayerState.IDLE;
                     player.setMovementContext(MovementContext.NORMAL);
@@ -183,6 +194,10 @@ public class PlayerStateComponent implements Component {
         return lastGroundTime;
     }
     
+    public long getCrouchStartTime() {
+        return crouchStartTime;
+    }
+    
     public enum MovementContext {
         NORMAL,
         RUNNING,
@@ -191,8 +206,8 @@ public class PlayerStateComponent implements Component {
         SLIDING
     }
 
-	@Override
-	public ComponentType getType() {
-		return ComponentType.STATE;
-	}
+    @Override
+    public ComponentType getType() {
+        return ComponentType.STATE;
+    }
 }

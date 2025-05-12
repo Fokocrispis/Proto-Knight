@@ -55,6 +55,11 @@ public class PlayerAnimationComponent implements Component {
         stateSprites.put(PlayerState.SLIDING, spriteManager.getSprite("player_slide"));
         stateSprites.put(PlayerState.ATTACKING, spriteManager.getSprite("player_roll"));
         
+        // FIX: Add these contextual sprites for better crouching
+        contextualSprites.put("crouching_idle", spriteManager.getSprite("player_crouch"));
+        contextualSprites.put("crouching_walk", spriteManager.getSprite("player_crawl"));
+        contextualSprites.put("crouching", spriteManager.getSprite("player_crouch")); // Fallback
+        
         // Contextual sprites for combined states
         contextualSprites.put("turn_left", spriteManager.getSprite("player_run_turning"));
         contextualSprites.put("turn_right", spriteManager.getSprite("player_run_turning"));
@@ -75,7 +80,6 @@ public class PlayerAnimationComponent implements Component {
         
         // Sliding and crouching
         contextualSprites.put("sliding", spriteManager.getSprite("player_slide"));
-        contextualSprites.put("crouching", spriteManager.getSprite("player_roll"));
         
         // Dash states
         contextualSprites.put("dash_start", spriteManager.getSprite("player_dash"));
@@ -185,10 +189,21 @@ public class PlayerAnimationComponent implements Component {
                 
             case IDLE:
             case WALKING:
+                // FIX: Better crouching sprite selection
                 if (context == PlayerStateComponent.MovementContext.CROUCHING) {
-                    newSprite = contextualSprites.get("crouching");
+                    // Use different crouching sprites for idle and walking if available
+                    String spriteKey = currentState == PlayerState.IDLE ? 
+                        "crouching_idle" : "crouching_walk";
+                    
+                    newSprite = contextualSprites.get(spriteKey);
+                    
+                    // Fallback to generic crouching sprite if specific ones aren't available
                     if (newSprite == null) {
-                        // Fallback to normal sprites if no crouching sprite
+                        newSprite = contextualSprites.get("crouching");
+                    }
+                    
+                    // Last resort fallback to normal sprites if no crouching sprites exist
+                    if (newSprite == null) {
                         newSprite = stateSprites.get(currentState);
                     }
                 } else {
@@ -368,9 +383,8 @@ public class PlayerAnimationComponent implements Component {
         return currentSprite;
     }
 
-	@Override
-	public ComponentType getType() {
-		// TODO Auto-generated method stub
-		return ComponentType.PHYSICS;
-	}
+    @Override
+    public ComponentType getType() {
+        return ComponentType.ANIMATION;
+    }
 }
