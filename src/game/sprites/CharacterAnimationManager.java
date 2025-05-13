@@ -1,7 +1,6 @@
 package game.sprites;
 
 import java.awt.Dimension;
-import java.io.IOException;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
@@ -35,7 +34,7 @@ public class CharacterAnimationManager {
      * Loads all standard animations for this character
      */
     public void loadAllAnimations() {
-        // Load with standard frame sizes and durations
+        // Define standard frame size and scale
         Dimension frameSize = new Dimension(64, 64);
         double scale = 3.0;
         
@@ -157,8 +156,7 @@ public class CharacterAnimationManager {
         System.out.println("====== Animations for " + characterId + " ======");
         animations.forEach((key, sprite) -> {
             int frameCount = sprite.getTotalFrames();
-            boolean isLooping = sprite instanceof LoopingSprite ? 
-                ((LoopingSprite)sprite).isLooping() : false;
+            boolean isLooping = sprite.isLooping();
             
             System.out.println(key + ": " + frameCount + " frames" + 
                                (isLooping ? " (looping)" : ""));

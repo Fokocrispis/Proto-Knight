@@ -3,49 +3,134 @@ package game.sprites;
 import java.awt.Dimension;
 import java.awt.image.BufferedImage;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
- * A sprite implementation that uses a sequence of individual images
- * instead of a sprite sheet for animation frames.
+ * An implementation of Sprite that handles sequences of individual frames.
+ * This is the core sprite class that handles all sprite functionality.
  */
-public class SequenceSprite extends Sprite {
-    private final List<BufferedImage> frames;
-    private final String name;
-    private final double scale;
-    private final Duration duration;
-    private final Dimension frameSize;
+public class SequenceSprite implements Sprite {
+    protected final String name;
+    protected final List<BufferedImage> frames;
+    protected final Dimension frameSize;
+    protected final Duration duration;
+    protected final boolean looping;
     
-    private long timeElapsed;
-    private int frameIndex;
+    // These are no longer final so they can be adjusted
+    protected double scaleX;
+    protected double scaleY;
+    protected int offsetX;
+    protected int offsetY;
     
+    protected long timeElapsed;
+    protected int frameIndex;
+    protected double timePerFrame;
+    protected boolean completed = false;
+    protected int currentLoop = 0;
+    protected int maxLoops = -1; // -1 for infinite loops
+
     /**
-     * Creates a new sequence sprite with the given frames
+     * Creates a new sprite sequence.
+     *
+     * @param name The sprite name
+     * @param frames List of frame images
+     * @param frameSize Size of each frame
+     * @param scaleX Horizontal scale factor
+     * @param scaleY Vertical scale factor
+     * @param offsetX X offset for positioning
+     * @param offsetY Y offset for positioning
+     * @param duration Animation duration
+     * @param looping Whether the animation should loop
+     */
+    public SequenceSprite(
+            String name,
+            List<BufferedImage> frames,
+            Dimension frameSize,
+            double scaleX,
+            double scaleY,
+            int offsetX,
+            int offsetY,
+            Duration duration,
+            boolean looping) {
+        
+        this.name = name;
+        this.frames = new ArrayList<>(frames);
+        this.frameSize = new Dimension(frameSize);
+        this.scaleX = scaleX;
+        this.scaleY = scaleY;
+        this.offsetX = offsetX;
+        this.offsetY = offsetY;
+        this.duration = duration;
+        this.looping = looping;
+        
+        this.timeElapsed = 0;
+        this.frameIndex = 0;
+        
+        // Calculate time per frame
+        int frameCount = Math.max(1, frames.size());
+        this.timePerFrame = (double) duration.toMillis() / frameCount;
+    }
+
+    /**
+     * Creates a new sprite sequence with uniform scaling.
+     *
+     * @param name The sprite name
+     * @param frames List of frame images
+     * @param frameSize Size of each frame
+     * @param scale Scale factor for both dimensions
+     * @param duration Animation duration
+     * @param looping Whether the animation should loop
      */
     public SequenceSprite(
             String name,
             List<BufferedImage> frames,
             Dimension frameSize,
             double scale,
-            Duration duration) {
+            Duration duration,
+            boolean looping) {
         
-        // Call parent constructor with a dummy sprite sheet (first frame)
-        // We'll override the getFrame method to use our frame list instead
-        super(name, frames.isEmpty() ? null : frames.get(0), 
-              frameSize, scale, 0, frames.size(), duration);
-        
-        this.name = name;
-        this.frames = frames;
-        this.scale = scale;
-        this.duration = duration;
-        this.frameSize = frameSize;
-        this.timeElapsed = 0;
-        this.frameIndex = 0;
+        this(name, frames, frameSize, scale, scale, 0, 0, duration, looping);
     }
-    
-    /**
-     * Gets the current frame directly from the frame list
-     */
+
+    @Override
+    public void update(long deltaTime) {
+        if (completed) return;
+        
+        // Store current frame for loop detection
+        int previousFrame = frameIndex;
+        
+        timeElapsed += deltaTime;
+        
+        // Update frame index
+        if (timePerFrame > 0) {
+            int newFrameIndex = (int)(timeElapsed / timePerFrame);
+            
+            if (looping) {
+                // Handle looping - calculate the correct frame within loop bounds
+                frameIndex = newFrameIndex % frames.size();
+                
+                // Check if we've completed a loop
+                if (previousFrame > frameIndex && maxLoops > 0) {
+                    currentLoop++;
+                    if (currentLoop >= maxLoops) {
+                        completed = true;
+                        // Stay on last frame
+                        frameIndex = frames.size() - 1;
+                    }
+                }
+            } else {
+                // Non-looping - clamp to last frame
+                frameIndex = Math.min(newFrameIndex, frames.size() - 1);
+                
+                // Check if animation is complete
+                if (frameIndex == frames.size() - 1) {
+                    completed = true;
+                }
+            }
+        }
+    }
+
     @Override
     public BufferedImage getFrame() {
         if (frames.isEmpty()) {
@@ -54,49 +139,147 @@ public class SequenceSprite extends Sprite {
         
         // Ensure frame index is valid
         if (frameIndex < 0 || frameIndex >= frames.size()) {
-            System.err.println("Invalid frame index for sprite '" + name + "': " + frameIndex);
-            frameIndex = 0;
+            return frames.get(0);
         }
         
         return frames.get(frameIndex);
     }
-    
-    /**
-     * Updates the animation state
-     */
+
     @Override
-    public void update(long deltaTime) {
-        if (frames.size() <= 1) return;
-        
-        timeElapsed += deltaTime;
-        double timePerFrame = (double) duration.toMillis() / frames.size();
-        
-        if (timeElapsed >= timePerFrame) {
-            // Advance to next frame
-            frameIndex = (frameIndex + 1) % frames.size();
-            timeElapsed -= timePerFrame;
-        }
+    public Dimension getSize() {
+        return new Dimension(
+            (int)(frameSize.width * scaleX),
+            (int)(frameSize.height * scaleY)
+        );
     }
-    
-    /**
-     * Resets the animation to the first frame
-     */
+
+    @Override
+    public Dimension getFrameSize() {
+        return new Dimension(frameSize);
+    }
+
+    @Override
+    public int getFrameIndex() {
+        return frameIndex;
+    }
+
+    @Override
+    public int getTotalFrames() {
+        return frames.size();
+    }
+
     @Override
     public void reset() {
         frameIndex = 0;
         timeElapsed = 0;
+        completed = false;
+        currentLoop = 0;
     }
-    
+
+    @Override
+    public String getName() {
+        return name;
+    }
+
+    @Override
+    public Duration getDuration() {
+        return duration;
+    }
+
+    @Override
+    public boolean hasCompleted() {
+        return completed;
+    }
+
+    @Override
+    public boolean isLooping() {
+        return looping;
+    }
+
+    @Override
+    public double getScaleX() {
+        return scaleX;
+    }
+
+    @Override
+    public double getScaleY() {
+        return scaleY;
+    }
+
+    @Override
+    public void setScale(double scaleX, double scaleY) {
+        this.scaleX = scaleX;
+        this.scaleY = scaleY;
+    }
+
+    @Override
+    public int getOffsetX() {
+        return offsetX;
+    }
+
+    @Override
+    public int getOffsetY() {
+        return offsetY;
+    }
+
+    @Override
+    public void setOffset(int offsetX, int offsetY) {
+        this.offsetX = offsetX;
+        this.offsetY = offsetY;
+    }
+
+    @Override
+    public void setOffsetX(int offsetX) {
+        this.offsetX = offsetX;
+    }
+
+    @Override
+    public void setOffsetY(int offsetY) {
+        this.offsetY = offsetY;
+    }
+
+    @Override
+    public int getRenderX(double entityX) {
+        return (int)(entityX - getSize().width / 2.0) + offsetX;
+    }
+
+    @Override
+    public int getRenderY(double entityY, int collisionHeight) {
+        // Align sprite bottom with collision bottom
+        int spriteBottom = (int)(entityY + collisionHeight / 2.0);
+        return spriteBottom - getSize().height + offsetY;
+    }
+
     /**
-     * Creates an error frame for when loading fails
+     * Sets the maximum number of loops before the animation stops.
+     *
+     * @param maxLoops Number of loops, or -1 for infinite
      */
-    private BufferedImage createErrorFrame() {
+    public void setMaxLoops(int maxLoops) {
+        this.maxLoops = maxLoops;
+    }
+
+    /**
+     * Gets the current loop count.
+     *
+     * @return The current loop count
+     */
+    public int getCurrentLoop() {
+        return currentLoop;
+    }
+
+    /**
+     * Creates an error frame for when loading fails.
+     *
+     * @return A placeholder error frame
+     */
+    protected BufferedImage createErrorFrame() {
         BufferedImage errorFrame = new BufferedImage(
                 frameSize.width, frameSize.height, BufferedImage.TYPE_INT_ARGB);
         java.awt.Graphics2D g = errorFrame.createGraphics();
         
         // Fill with pink to indicate error
-        g.setColor(java.awt.Color.PINK);
+        g.setColor(java.awt.Color.MAGENTA);
         g.fillRect(0, 0, frameSize.width, frameSize.height);
         
         // Add error text
@@ -108,37 +291,18 @@ public class SequenceSprite extends Sprite {
         g.dispose();
         return errorFrame;
     }
-    
+
     /**
-     * Gets the number of frames in this sprite
+     * Gets debug information about the sprite.
+     *
+     * @return Debug information string
      */
-    @Override
-    public int getTotalFrames() {
-        return frames.size();
-    }
-    
-    /**
-     * Gets the current frame index
-     */
-    @Override
-    public int getFrameIndex() {
-        return frameIndex;
-    }
-    
-    /**
-     * Gets the name of this sprite
-     */
-    @Override
-    public String getName() {
-        return name;
-    }
-    
-    /**
-     * Gets debug information about the sprite
-     */
-    @Override
     public String getDebugInfo() {
-        return String.format("SequenceSprite '%s': frame %d/%d, duration: %d ms", 
-            name, frameIndex + 1, frames.size(), duration.toMillis());
+        return String.format("Sprite '%s': frame %d/%d, %dx%d (scale %.1f,%.1f), offset (%d,%d), %s",
+            name, frameIndex + 1, frames.size(),
+            getSize().width, getSize().height,
+            scaleX, scaleY,
+            offsetX, offsetY,
+            looping ? "looping" : "non-looping");
     }
 }

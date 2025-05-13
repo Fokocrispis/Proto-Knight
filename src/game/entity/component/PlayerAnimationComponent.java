@@ -1,7 +1,8 @@
 package game.entity.component;
 
-import java.awt.Graphics2D;
 import java.awt.Color;
+import java.awt.Dimension;
+import java.awt.Graphics2D;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -9,11 +10,12 @@ import game.Vector2D;
 import game.entity.PlayerEntity;
 import game.entity.PlayerState;
 import game.entity.component.Component.ComponentType;
-import game.sprites.AdjustableSequenceSprite;
-import game.sprites.CharacterAnimationManager;
-import game.sprites.LoopingSprite;
 import game.sprites.Sprite;
+import game.sprites.CharacterAnimationManager;
 
+/**
+ * Component that handles player animation and rendering.
+ */
 public class PlayerAnimationComponent implements Component {
     private final PlayerEntity player;
     private Sprite currentSprite;
@@ -26,8 +28,6 @@ public class PlayerAnimationComponent implements Component {
     // Sprite dimensions
     private static final int HITBOX_WIDTH = 40;
     private static final int HITBOX_HEIGHT = 140;
-    private static final int SPRITE_WIDTH = 80;
-    private static final int SPRITE_HEIGHT = 160;
     
     private boolean isSpriteLocked = false;
     private long activeSpriteTimer = 0;
@@ -83,16 +83,8 @@ public class PlayerAnimationComponent implements Component {
             currentSprite.update(deltaTime);
             
             // Handle non-looping sprites
-            if (currentSprite instanceof LoopingSprite) {
-                LoopingSprite loopingSprite = (LoopingSprite) currentSprite;
-                if (!loopingSprite.isLooping() && loopingSprite.hasCompleted()) {
-                    handleAnimationComplete();
-                }
-            } else if (currentSprite instanceof AdjustableSequenceSprite) {
-                AdjustableSequenceSprite adjustableSprite = (AdjustableSequenceSprite) currentSprite;
-                if (!adjustableSprite.isLooping() && adjustableSprite.hasCompleted()) {
-                    handleAnimationComplete();
-                }
+            if (!currentSprite.isLooping() && currentSprite.hasCompleted()) {
+                handleAnimationComplete();
             }
         }
     }
@@ -202,50 +194,37 @@ public class PlayerAnimationComponent implements Component {
             resetCurrentSprite();
         }
     }
+    
     private void resetCurrentSprite() {
-        if (currentSprite instanceof LoopingSprite) {
-            ((LoopingSprite) currentSprite).reset();
-        } else if (currentSprite instanceof AdjustableSequenceSprite) {
-            ((AdjustableSequenceSprite) currentSprite).reset();
-        } else if (currentSprite != null) {
+        if (currentSprite != null) {
             currentSprite.reset();
         }
     }
     
+    @Override
     public void render(Graphics2D g) {
         if (!player.isVisible() || currentSprite == null) return;
         
-        // Default sprite offset adjustment
-        int SPRITE_OFFSET_X = 0;
-        int SPRITE_OFFSET_Y = 50;
+        // Get sprite position using its built-in positioning methods
+        Vector2D pos = player.getPosition();
+        int hitboxHeight = player.getHeight();
+        
+        // Calculate sprite position using Sprite's methods
+        int spriteX = currentSprite.getRenderX(pos.getX());
+        int spriteY = currentSprite.getRenderY(pos.getY(), hitboxHeight);
         
         // Get sprite dimensions
-        int renderedWidth = currentSprite.getSize().width;
-        int renderedHeight = currentSprite.getSize().height;
-        
-        // Calculate sprite position
-        int spriteX, spriteY;
-        
-        if (currentSprite instanceof AdjustableSequenceSprite) {
-            // Use the built-in positioning for adjustable sprites
-            AdjustableSequenceSprite adjustableSprite = (AdjustableSequenceSprite) currentSprite;
-            spriteX = adjustableSprite.getRenderX(player.getPosition().getX());
-            spriteY = adjustableSprite.getRenderY(player.getPosition().getY(), HITBOX_HEIGHT);
-        } else {
-            // Standard positioning for regular sprites
-            spriteX = (int)(player.getPosition().getX() - renderedWidth / 2.0) + SPRITE_OFFSET_X;
-            spriteY = (int)(player.getPosition().getY() - HITBOX_HEIGHT / 2.0 - (renderedHeight - HITBOX_HEIGHT)) + SPRITE_OFFSET_Y;
-        }
+        Dimension spriteSize = currentSprite.getSize();
         
         // Draw sprite (flipped if facing left)
         if (player.isFacingRight()) {
             g.drawImage(currentSprite.getFrame(), 
                        spriteX, spriteY, 
-                       renderedWidth, renderedHeight, null);
+                       spriteSize.width, spriteSize.height, null);
         } else {
             g.drawImage(currentSprite.getFrame(), 
-                       spriteX + renderedWidth, spriteY,
-                       -renderedWidth, renderedHeight, null);
+                       spriteX + spriteSize.width, spriteY,
+                       -spriteSize.width, spriteSize.height, null);
         }
         
         // Draw health and mana bars
@@ -254,7 +233,7 @@ public class PlayerAnimationComponent implements Component {
         // Draw hook line if hooking
         if (player.isHooking() && player.getHookTarget() != null) {
             g.setColor(Color.CYAN);
-            g.drawLine((int)player.getPosition().getX(), (int)player.getPosition().getY(), 
+            g.drawLine((int)pos.getX(), (int)pos.getY(), 
                       (int)player.getHookTarget().getX(), (int)player.getHookTarget().getY());
         }
         
@@ -326,18 +305,15 @@ public class PlayerAnimationComponent implements Component {
         g.setColor(Color.WHITE);
         String spriteInfo = "Unknown";
         
-        if (currentSprite instanceof AdjustableSequenceSprite) {
-            AdjustableSequenceSprite sprite = (AdjustableSequenceSprite) currentSprite;
-            spriteInfo = String.format("AdjustableSequence: %dx%d, offset: %d,%d",
-                sprite.getSize().width, sprite.getSize().height,
-                sprite.getOffsetX(), sprite.getOffsetY());
-        } else if (currentSprite != null) {
-            spriteInfo = String.format("Standard: %dx%d [%d/%d]", 
+        if (currentSprite != null) {
+            spriteInfo = String.format("Sprite: %s [%dx%d] scale(%.1f,%.1f) offset(%d,%d)",
+                currentSprite.getName(),
                 currentSprite.getSize().width, currentSprite.getSize().height,
-                currentSprite.getFrameIndex() + 1, currentSprite.getTotalFrames());
+                currentSprite.getScaleX(), currentSprite.getScaleY(),
+                currentSprite.getOffsetX(), currentSprite.getOffsetY());
         }
         
-        g.drawString(spriteInfo, (int)player.getPosition().getX() - 80, (int)player.getPosition().getY() - 100);
+        g.drawString(spriteInfo, (int)player.getPosition().getX() - 150, (int)player.getPosition().getY() - 100);
         
         // Display state info
         g.drawString("State: " + player.getCurrentState() + ", Context: " + player.getMovementContext(), 
@@ -374,39 +350,6 @@ public class PlayerAnimationComponent implements Component {
     
     public Sprite getCurrentSprite() {
         return currentSprite;
-    }
-    
-    /**
-     * Handles transition from running to walking or idle
-     */
-    private void handleRunningSlowdown(float dt) {
-        // Only handle when on ground and not animation-locked
-        if (!player.isOnGround() || player.isAnimationLocked()) return;
-        
-        // Check if we're running but slowing down
-        if (player.getCurrentState() == PlayerState.RUNNING) {
-            double speed = Math.abs(player.getVelocity().getX());
-            double targetSpeed = Math.abs(player.getTargetVelocityX());
-            
-            // If we're slowing down significantly
-            if (speed > 400 && targetSpeed < 100) {
-                // Special transition animation from running to stop
-                player.setCurrentState(PlayerState.IDLE);
-                player.setMovementContext(PlayerStateComponent.MovementContext.NORMAL);
-                
-                // Use the run_to_stop animation
-                if (player.hasComponent(ComponentType.ANIMATION)) {
-                    PlayerAnimationComponent animComponent = player.getComponent(ComponentType.ANIMATION);
-                    Sprite runToStopSprite = animComponent.getAnimation("run_to_stop");
-                        
-                    if (runToStopSprite != null) {
-                        // Lock animation for the transition
-                        player.lockAnimation(400);
-                        player.updateSpriteForState();
-                    }
-                }
-            }
-        }
     }
 
     @Override

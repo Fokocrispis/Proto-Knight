@@ -1,281 +1,162 @@
-package game.sprites;
+ vpackage game.sprites;
 
 import java.awt.Dimension;
 import java.awt.image.BufferedImage;
 import java.time.Duration;
 
 /**
- * Sprite class with division by zero protection
+ * Base sprite interface that all sprite implementations must implement.
+ * Defines common operations that all sprites should support.
  */
-public class Sprite {
-    private final BufferedImage spritesheet;
-    private final Dimension frameSize;
-    private final double scale;
-    private final int firstFrame;
-    private final int totalFrames;
-    private final double timePerFrame;
-    private final Duration duration;
-    private final String name;
-    
-    private long timeElapsed;
-    private int frameIndex;
-    private Offset offset;
+public interface Sprite {
+    /**
+     * Updates the sprite animation state.
+     * 
+     * @param deltaTime Time elapsed since last update in milliseconds
+     */
+    void update(long deltaTime);
     
     /**
-     * Creates a new sprite with bounds checking
+     * Renders the current frame.
+     * 
+     * @return The current frame image
      */
-    public Sprite(String name, BufferedImage spritesheet, Dimension frameSize, 
-                  double scale, int firstFrame, int totalFrames, Duration duration) {
-        this.name = name;
-        this.spritesheet = spritesheet;
-        this.frameSize = frameSize;
-        this.scale = scale;
-        this.firstFrame = firstFrame;
-        this.totalFrames = Math.max(1, totalFrames); // Ensure at least 1 frame
-        this.duration = duration;
-        this.timePerFrame = Math.max(1, this.duration.toMillis()) / Math.max(1, this.totalFrames);
-        
-        this.timeElapsed = 0;
-        this.frameIndex = 0;
-        
-        // Verify the sprite sheet can accommodate all frames
-        validateSpritesheet();
-        
-        this.offset = calculateOffset();
-    }
+    BufferedImage getFrame();
     
     /**
-     * Validates that the spritesheet can accommodate all requested frames
+     * Gets the size of the sprite with scaling applied.
+     * 
+     * @return The scaled dimensions
      */
-    private void validateSpritesheet() {
-        if (spritesheet == null || frameSize.width <= 0 || frameSize.height <= 0) {
-            System.err.println("Warning: Invalid spritesheet or frame size for sprite '" + name + "'");
-            return;
-        }
-        
-        int columns = getSpritesheetColumns();
-        int rows = getSpritesheetRows();
-        int totalFramesInSheet = columns * rows;
-        
-        int lastFrameIndex = firstFrame + totalFrames - 1;
-        
-        if (lastFrameIndex >= totalFramesInSheet) {
-            System.err.println("Warning: Sprite '" + name + "' requests frames beyond spritesheet bounds!");
-            System.err.println("  Requested: " + (firstFrame + totalFrames) + " frames");
-            System.err.println("  Available: " + totalFramesInSheet + " frames");
-        }
-    }
+    Dimension getSize();
     
     /**
-     * Gets the current frame with proper bounds checking
+     * Gets the original frame size without scaling.
+     * 
+     * @return The unscaled frame dimensions
      */
-    public BufferedImage getFrame() {
-        try {
-            // Calculate the offset with bounds checking
-            this.offset = calculateOffset();
-            
-            // Verify the calculated bounds are valid
-            if (!isValidFrame(offset)) {
-                System.err.println("Invalid frame bounds for sprite '" + name + "' at frame " + frameIndex);
-                return createErrorFrame();
-            }
-            
-            return spritesheet.getSubimage(
-                offset.getX(),
-                offset.getY(),
-                frameSize.width,
-                frameSize.height
-            );
-        } catch (Exception e) {
-            System.err.println("Error getting frame for sprite '" + name + "' at frame " + frameIndex + ": " + e.getMessage());
-            return createErrorFrame();
-        }
-    }
+    Dimension getFrameSize();
     
     /**
-     * Checks if the calculated frame bounds are valid
+     * Gets the current frame index.
+     * 
+     * @return Current frame index
      */
-    private boolean isValidFrame(Offset offset) {
-        int x = offset.getX();
-        int y = offset.getY();
-        
-        // Check if frame is within spritesheet bounds
-        if (x < 0 || y < 0) return false;
-        if (x + frameSize.width > spritesheet.getWidth()) return false;
-        if (y + frameSize.height > spritesheet.getHeight()) return false;
-        
-        return true;
-    }
+    int getFrameIndex();
     
     /**
-     * Creates an error frame when the requested frame is invalid
+     * Gets the total number of frames.
+     * 
+     * @return Total number of frames
      */
-    private BufferedImage createErrorFrame() {
-        BufferedImage errorFrame = new BufferedImage(frameSize.width, frameSize.height, BufferedImage.TYPE_INT_ARGB);
-        java.awt.Graphics2D g = errorFrame.createGraphics();
-        
-        // Fill with pink to indicate error
-        g.setColor(java.awt.Color.PINK);
-        g.fillRect(0, 0, frameSize.width, frameSize.height);
-        
-        // Add error text
-        g.setColor(java.awt.Color.BLACK);
-        g.setFont(new java.awt.Font("Arial", java.awt.Font.BOLD, 8));
-        String errorText = "ERROR";
-        g.drawString(errorText, frameSize.width / 4, frameSize.height / 2);
-        
-        g.dispose();
-        return errorFrame;
-    }
+    int getTotalFrames();
     
     /**
-     * Gets the size of the sprite with scaling applied
+     * Resets the animation to the beginning.
      */
-    public Dimension getSize() {
-        return new Dimension(
-            (int)(frameSize.width * scale),
-            (int)(frameSize.height * scale)
-        );
-    }
+    void reset();
     
     /**
-     * Gets the frame size without scaling
+     * Gets the name of the sprite.
+     * 
+     * @return The sprite name
      */
-    public Dimension getFrameSize() {
-        return new Dimension(frameSize.width, frameSize.height);
-    }
+    String getName();
     
     /**
-     * Gets the scale factor
+     * Gets the duration of the complete animation.
+     * 
+     * @return The animation duration
      */
-    public double getScale() {
-        return scale;
-    }
+    Duration getDuration();
     
     /**
-     * Gets the current frame index
+     * Checks if the sprite animation has completed.
+     * For looping sprites, this is typically false unless max loops is reached.
+     * 
+     * @return True if animation has completed, false otherwise
      */
-    public int getFrameIndex() {
-        return frameIndex;
-    }
+    boolean hasCompleted();
     
     /**
-     * Gets the total number of frames
+     * Checks if the sprite animation loops.
+     * 
+     * @return True if looping, false otherwise
      */
-    public int getTotalFrames() {
-        return totalFrames;
-    }
+    boolean isLooping();
     
     /**
-     * Gets the first frame index
+     * Gets the horizontal scale factor.
+     * 
+     * @return The horizontal scale
      */
-    public int getFirstFrame() {
-        return firstFrame;
-    }
+    double getScaleX();
     
     /**
-     * Updates the sprite animation with frame bounds checking
+     * Gets the vertical scale factor.
+     * 
+     * @return The vertical scale
      */
-    public void update(long deltaTime) {
-        timeElapsed += deltaTime;
-        
-        if (timeElapsed >= timePerFrame) {
-            // Advance to next frame
-            frameIndex = (frameIndex + 1) % totalFrames;
-            timeElapsed -= timePerFrame;
-            
-            // Recalculate offset for new frame
-            this.offset = calculateOffset();
-        }
-    }
+    double getScaleY();
     
     /**
-     * Resets the sprite animation to the first frame
+     * Sets the horizontal and vertical scale factors.
+     * 
+     * @param scaleX Horizontal scale factor
+     * @param scaleY Vertical scale factor
      */
-    public void reset() {
-        frameIndex = 0;
-        timeElapsed = 0;
-        offset = calculateOffset();
-    }
+    void setScale(double scaleX, double scaleY);
     
     /**
-     * Gets the duration of the animation
+     * Gets the X offset for positioning.
+     * 
+     * @return The X offset
      */
-    public Duration getDuration() {
-        return duration;
-    }
+    int getOffsetX();
     
     /**
-     * Gets the name of the sprite
+     * Gets the Y offset for positioning.
+     * 
+     * @return The Y offset
      */
-    public String getName() {
-        return name;
-    }
+    int getOffsetY();
     
     /**
-     * Calculates the offset of the current frame in the sprite sheet with bounds checking
+     * Sets the position offsets.
+     * 
+     * @param offsetX X offset
+     * @param offsetY Y offset
      */
-    private Offset calculateOffset() {
-        int columns = getSpritesheetColumns();
-        int currentFrame = firstFrame + frameIndex;
-        
-        // Ensure we don't exceed the available frames
-        int totalPossibleFrames = columns * getSpritesheetRows();
-        
-        if (currentFrame >= totalPossibleFrames) {
-            System.err.println("Frame " + currentFrame + " exceeds available frames (" + totalPossibleFrames + ") for sprite '" + name + "'");
-            currentFrame = Math.max(0, totalPossibleFrames - 1); // Use last available frame
-        }
-        
-        int x = (currentFrame % columns) * frameSize.width;
-        int y = (currentFrame / columns) * frameSize.height;
-        
-        return new Offset(x, y);
-    }
+    void setOffset(int offsetX, int offsetY);
     
     /**
-     * Gets the number of columns in the spritesheet
+     * Sets the X position offset.
+     * 
+     * @param offsetX X offset
      */
-    private int getSpritesheetColumns() {
-        if (frameSize.width <= 0) return 1; // Prevent division by zero
-        return Math.max(1, spritesheet.getWidth() / frameSize.width);
-    }
+    void setOffsetX(int offsetX);
     
     /**
-     * Gets the number of rows in the spritesheet
+     * Sets the Y position offset.
+     * 
+     * @param offsetY Y offset
      */
-    private int getSpritesheetRows() {
-        if (frameSize.height <= 0) return 1; // Prevent division by zero
-        return Math.max(1, spritesheet.getHeight() / frameSize.height);
-    }
+    void setOffsetY(int offsetY);
     
     /**
-     * Gets debug information about the sprite
+     * Gets the properly centered render position for X coordinate.
+     * 
+     * @param entityX The entity's X position
+     * @return The X position for rendering
      */
-    public String getDebugInfo() {
-        return String.format("Sprite '%s': frame %d/%d, offset (%d,%d), size %dx%d", 
-            name, frameIndex, totalFrames, offset.getX(), offset.getY(), 
-            frameSize.width, frameSize.height);
-    }
-}
-
-/**
- * Represents an offset in the sprite sheet
- */
-class Offset {
-    private final int x;
-    private final int y;
+    int getRenderX(double entityX);
     
-    public Offset(int x, int y) {
-        this.x = x;
-        this.y = y;
-    }
-    
-    public int getX() {
-        return x;
-    }
-    
-    public int getY() {
-        return y;
-    }
+    /**
+     * Gets the properly centered render position for Y coordinate.
+     * 
+     * @param entityY The entity's Y position
+     * @param collisionHeight The entity's collision height
+     * @return The Y position for rendering
+     */
+    int getRenderY(double entityY, int collisionHeight);
 }

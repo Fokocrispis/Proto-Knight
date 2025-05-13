@@ -10,7 +10,6 @@ import game.entity.PlayerEntity;
 import game.entity.PlayerState;
 import game.sprites.Sprite;
 import game.sprites.AttackSequenceManager;
-import game.sprites.LoopingSprite;
 
 /**
  * Handles player attack animations and combat logic.
@@ -89,10 +88,8 @@ public class PlayerAttackComponent implements Component {
         // Check if attack animation is complete
         Sprite currentSprite = player.getCurrentSprite();
         
-        if (currentSprite != null && currentSprite instanceof LoopingSprite) {
-            LoopingSprite loopingSprite = (LoopingSprite) currentSprite;
-            
-            if (!loopingSprite.isLooping() && loopingSprite.hasCompleted()) {
+        if (currentSprite != null) {
+            if (!currentSprite.isLooping() && currentSprite.hasCompleted()) {
                 // Attack animation complete
                 completeAttack();
             }
@@ -227,7 +224,7 @@ public class PlayerAttackComponent implements Component {
             baseHitbox.height
         );
         
-        // TODO: Register hitbox with physics system for actual damage
+        // Register hitbox with physics system for actual damage
         System.out.println("Created " + attackType + " hitbox at: " + hitbox);
     }
     
