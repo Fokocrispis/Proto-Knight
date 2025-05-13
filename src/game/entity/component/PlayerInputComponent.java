@@ -22,9 +22,11 @@ public class PlayerInputComponent implements Component {
     private static final long COYOTE_TIME = 150;
     private static final long JUMP_BUFFER_TIME = 200;
     private static final long DOWN_PRESS_THRESHOLD = 150; // Time to recognize DOWN as intentional
+    private static final long COMBO_WINDOW = 500; // Time window for combo inputs
     
     // Cooldown tracking
     private long lastJumpPressTime = 0;
+    private long lastAttackTime = 0;
     private boolean wasTryingToMove = false;
     private boolean downWasPressed = false;  // Track when DOWN is pressed
     private long downPressedTime = 0;        // When DOWN was first pressed
@@ -55,8 +57,15 @@ public class PlayerInputComponent implements Component {
         } else {
             // Even when locked, we need to track input states for next frame
             updateInputTracking(currentTime);
+            
+            // Allow combo input even during animation lock
+            if (player.isAttacking()) {
+                handleComboInput(currentTime);
+            }
         }
     }
+    
+    // (Keep the existing captureInputState and updateInputTracking methods)
     
     /**
      * Captures the current input state for tracking purposes
@@ -96,6 +105,7 @@ public class PlayerInputComponent implements Component {
     }
     
     private void handleMovementInput(long currentTime) {
+        // (Keep the existing code)
         wasTryingToMove = false;
         
         // Handle actions based on DOWN key
@@ -186,6 +196,8 @@ public class PlayerInputComponent implements Component {
         player.setWasTryingToMove(wasTryingToMove);
     }
     
+    // (Keep the existing handleJumpInput and handleSpecialMovement methods)
+    
     private void handleJumpInput(long currentTime) {
         // Jump input with buffering
         if (input.isKeyJustPressed(KeyEvent.VK_SPACE)) {
@@ -247,14 +259,32 @@ public class PlayerInputComponent implements Component {
     }
     
     private void handleCombatInput(long currentTime) {
-        // Basic attack (using X)
-        if (input.isKeyJustPressed(KeyEvent.VK_X)) {
-            player.performBasicAttack();
+        // Check for the combat component
+        PlayerAttackComponent attackComponent = null;
+        if (player.hasComponent(ComponentType.COMBAT)) {
+            attackComponent = player.getComponent(ComponentType.COMBAT);
         }
         
-        // Heavy attack
+        // Basic attack (using X)
+        if (input.isKeyJustPressed(KeyEvent.VK_X)) {
+            if (attackComponent != null) {
+                attackComponent.performLightAttack();
+            } else {
+                // Fallback to old attack method if component not found
+                player.performBasicAttack();
+            }
+            lastAttackTime = currentTime;
+        }
+        
+        // Heavy attack or dash attack
         if (input.isKeyJustPressed(KeyEvent.VK_C)) {
-            player.performHeavyAttack();
+            if (player.isDashing() && attackComponent != null) {
+                attackComponent.performDashAttack();
+            } else {
+                // Fallback to old heavy attack
+                player.performHeavyAttack();
+            }
+            lastAttackTime = currentTime;
         }
         
         // Spells
@@ -268,6 +298,28 @@ public class PlayerInputComponent implements Component {
             player.castHeal();
         }
     }
+    
+    /**
+     * Handle combo inputs even during animation lock
+     */
+    private void handleComboInput(long currentTime) {
+        // Check if we have the combat component
+        if (!player.hasComponent(ComponentType.COMBAT)) return;
+        
+        PlayerAttackComponent attackComponent = player.getComponent(ComponentType.COMBAT);
+        
+        // Check for combo opportunity
+        if (input.isKeyJustPressed(KeyEvent.VK_X) && 
+            currentTime - lastAttackTime <= COMBO_WINDOW && 
+            player.isAttacking()) {
+            
+            // Queue next combo attack
+            attackComponent.performLightAttack(); // This will check internally if combo is possible
+            lastAttackTime = currentTime;
+        }
+    }
+    
+    // (Keep the existing teleport and hook methods)
     
     private void performTeleport(double distance) {
         // Only teleport if not animation-locked

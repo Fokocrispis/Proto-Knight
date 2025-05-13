@@ -5,6 +5,7 @@ import game.entity.BuffType;
 import game.entity.PlayerEntity;
 import game.entity.PlayerState;
 import game.entity.component.Component.ComponentType;
+import game.sprites.Sprite;
 
 public class PlayerPhysicsComponent implements Component {
     private final PlayerEntity player;
@@ -30,6 +31,7 @@ public class PlayerPhysicsComponent implements Component {
     @Override
     public void update(long deltaTime) {
         float dt = deltaTime / 1000.0f;
+        handleRunningSlowdown(dt);
         long currentTime = System.currentTimeMillis();
         
         // Update states based on timing
@@ -181,6 +183,38 @@ public class PlayerPhysicsComponent implements Component {
                 player.setCurrentState(player.getVelocity().getY() < 0 ? 
                     PlayerState.JUMPING : PlayerState.FALLING);
                 // Keep DASHING context
+            }
+        }
+    }
+    /**
+     * Handles transition from running to walking or idle
+     */
+    private void handleRunningSlowdown(float dt) {
+        // Only handle when on ground and not animation-locked
+        if (!player.isOnGround() || player.isAnimationLocked()) return;
+        
+        // Check if we're running but slowing down
+        if (player.getCurrentState() == PlayerState.RUNNING) {
+            double speed = Math.abs(player.getVelocity().getX());
+            double targetSpeed = Math.abs(player.getTargetVelocityX());
+            
+            // If we're slowing down significantly
+            if (speed > 400 && targetSpeed < 100) {
+                // Special transition animation from running to stop
+                player.setCurrentState(PlayerState.IDLE);
+                player.setMovementContext(PlayerStateComponent.MovementContext.NORMAL);
+                
+                // Use the run_to_stop animation
+                if (player.hasComponent(ComponentType.ANIMATION)) {
+                    PlayerAnimationComponent animComponent = player.getComponent(ComponentType.ANIMATION);
+                    Sprite runToStopSprite = animComponent.getAnimation("run_to_stop");
+                        
+                    if (runToStopSprite != null) {
+                        // Lock animation for the transition
+                        player.lockAnimation(400);
+                        player.updateSpriteForState();
+                    }
+                }
             }
         }
     }

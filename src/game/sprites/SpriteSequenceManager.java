@@ -5,19 +5,17 @@ import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
 
 import game.resource.ResourceManager;
 
 /**
- * Manages sprite animations using sequences of individual image files
- * with support for manual size and offset adjustments.
+ * Manager for sprite sequences loaded from individual image files.
+ * Updated to work with the new character folder structure.
  */
 public class SpriteSequenceManager {
-    private static final String BASE_PATH = "JoannaD'ArcIII_v1.9.2/Sprites/";
-    
     // Cache for loaded sprites and frames
     private final Map<String, Sprite> sprites = new HashMap<>();
     private final Map<String, List<BufferedImage>> frameCache = new HashMap<>();
@@ -28,80 +26,144 @@ public class SpriteSequenceManager {
     }
     
     /**
-     * Creates all player sprites using the sequence approach.
-     * This method is called by SpriteSheetManager.
+     * Creates player sprites from animation sequences
      */
     public void createPlayerSprites() {
         // Define standard frame size and scale
-        Dimension defaultFrameSize = new Dimension(64, 64);
-        Dimension displaySize = new Dimension(190, 160);
+        Dimension frameSize = new Dimension(64, 64);
+        Dimension displaySize = new Dimension(192, 192);
+        double scale = 3.0;
         
-        // Walking animation
-        loadSpriteSequence(
-            "player_walk",
-            "Walk/Walking",
-            "Walking",
-            18,
-            defaultFrameSize,
-            displaySize,
-            0,  // Default X offset (adjust as needed)
-            0,  // Default Y offset (adjust as needed)
-            Duration.ofMillis(850),
-            true
-        );
-        
-        loadSpriteSequence(
-                "player_slide",
-                "Slide/SlideFrame",
-                "Slide",
-                10,
-                defaultFrameSize,
-                displaySize,
-                0,
-                0,
-                Duration.ofMillis(1000),
-                true
-            );
-        
-        // Add more animations as needed
-        // For example:
-        /*
+        // Load basic player animations
         loadSpriteSequence(
             "player_idle",
-            "Idle/Idle",
+            "Sprites/Joanna/Idle",
             "Idle",
             6,
-            defaultFrameSize,
-            displaySize,
-            0,
-            0,
+            frameSize,
+            scale,
             Duration.ofMillis(1000),
             true
         );
-        */
         
-        System.out.println("SpriteSequenceManager: Created player sprites");
+        loadSpriteSequence(
+            "player_run",
+            "Sprites/Joanna/Running",
+            "Running",
+            8,
+            frameSize,
+            scale,
+            Duration.ofMillis(800),
+            true
+        );
+        
+        loadSpriteSequence(
+            "player_to_run",
+            "Sprites/Joanna/ToRun",
+            "ToRun",
+            3,
+            frameSize,
+            scale,
+            Duration.ofMillis(300),
+            false
+        );
+        
+        loadSpriteSequence(
+            "player_light_attack",
+            "Sprites/Joanna/LightAtk",
+            "LightAtk",
+            12,
+            frameSize,
+            scale,
+            Duration.ofMillis(500),
+            false
+        );
+        
+        loadSpriteSequence(
+            "player_dash",
+            "Sprites/Joanna/Dashing",
+            "Dashing",
+            3,
+            frameSize,
+            scale,
+            Duration.ofMillis(200),
+            false
+        );
+        
+        loadSpriteSequence(
+            "player_break_run",
+            "Sprites/Joanna/BreakRun",
+            "BreakRun",
+            7,
+            frameSize,
+            scale,
+            Duration.ofMillis(400),
+            false
+        );
+        
+        loadSpriteSequence(
+            "player_land",
+            "Sprites/Joanna/Land",
+            "Land",
+            5,
+            frameSize,
+            scale,
+            Duration.ofMillis(300),
+            false
+        );
     }
     
     /**
-     * Loads an animation sequence with custom size adjustments.
+     * Loads a sprite sequence from a folder of image files
      * 
-     * @param animationName The name of the animation
-     * @param basePath The path to the animation files
-     * @param baseFileName The base name of the files
-     * @param frameCount The number of frames in the animation
-     * @param frameSize The size of each frame in the source files
-     * @param displaySize The size to display the sprite (for scaling)
-     * @param offsetX X offset for positioning
-     * @param offsetY Y offset for positioning
-     * @param duration The duration of the complete animation
+     * @param name Animation name
+     * @param path Path to the animation folder
+     * @param framePrefix Prefix for frame filenames
+     * @param frameCount Total frame count
+     * @param frameSize Size of each frame
+     * @param scale Rendering scale
+     * @param duration Animation duration
      * @param looping Whether the animation should loop
-     * @return The created sprite object
+     * @return The loaded sprite
      */
     public Sprite loadSpriteSequence(
-            String animationName,
-            String basePath,
-            String baseFileName,
+            String name,
+            String path,
+            String framePrefix,
+            int frameCount,
+            Dimension frameSize,
+            double scale,
+            Duration duration,
+            boolean looping) {
+        
+        // Create display size based on uniform scale
+        Dimension displaySize = new Dimension(
+            (int)(frameSize.width * scale),
+            (int)(frameSize.height * scale)
+        );
+        
+        // Use the more detailed method with default offsets (0,0)
+        return loadSpriteSequence(
+            name,
+            path,
+            framePrefix,
+            frameCount,
+            frameSize,
+            displaySize,
+            0,
+            0,
+            duration,
+            looping
+        );
+    }
+    
+    /**
+     * Loads a sprite sequence with position and size adjustments
+     */
+    public Sprite loadSpriteSequence(
+            String name,
+            String path,
+            String framePrefix,
             int frameCount,
             Dimension frameSize,
             Dimension displaySize,
@@ -111,21 +173,19 @@ public class SpriteSequenceManager {
             boolean looping) {
         
         // Check if already loaded
-        if (sprites.containsKey(animationName)) {
-            return sprites.get(animationName);
+        if (sprites.containsKey(name)) {
+            return sprites.get(name);
         }
         
-        // Construct the full path
-        String fullPath = BASE_PATH + basePath;
-        if (!basePath.endsWith("/") && !basePath.isEmpty()) {
-            fullPath += "/";
+        // Make sure path ends with slash
+        if (!path.endsWith("/")) {
+            path += "/";
         }
         
         // Load all frames
         List<BufferedImage> frames = new ArrayList<>();
-        for (int i = 0; i < frameCount; i++) {
-            int frameIndex = i + 1; // Start from 1
-            String fileName = fullPath + baseFileName + frameIndex + ".png";
+        for (int i = 1; i <= frameCount; i++) { // Start from 1 for frame numbering
+            String fileName = path + framePrefix + i + ".png";
             
             try {
                 BufferedImage frame = resourceManager.loadImage(fileName);
@@ -139,242 +199,114 @@ public class SpriteSequenceManager {
             }
         }
         
-        // If no frames were loaded, return null
+        // If no frames were loaded, try alternative naming conventions
         if (frames.isEmpty()) {
-            System.err.println("No frames loaded for animation: " + animationName);
+            System.out.println("Trying alternative naming patterns for: " + name);
+            frames = tryAlternativeNamingPatterns(path, framePrefix, frameCount);
+        }
+        
+        // If still no frames, return null
+        if (frames.isEmpty()) {
+            System.err.println("No frames loaded for animation: " + name + " at path: " + path);
             return null;
         }
         
         // Store frames in cache
-        frameCache.put(animationName, frames);
+        frameCache.put(name, frames);
         
         // Calculate scale factors based on desired display size
         double scaleX = (double)displaySize.width / frameSize.width;
         double scaleY = (double)displaySize.height / frameSize.height;
         
-        // Create the sprite with adjustments
-        AdjustableSequenceSprite sprite = new AdjustableSequenceSprite(
-            animationName, 
-            frames, 
-            frameSize, 
-            scaleX, 
-            scaleY,
-            offsetX,
-            offsetY,
-            duration, 
-            looping
-        );
+        // Create the appropriate sprite type
+        Sprite sprite;
+        if (looping) {
+            sprite = new LoopingSprite(name, frames, frameSize, scaleX, scaleY, offsetX, offsetY, duration, true);
+        } else {
+            sprite = new AdjustableSequenceSprite(name, frames, frameSize, scaleX, scaleY, offsetX, offsetY, duration, false);
+        }
         
-        sprites.put(animationName, sprite);
-        System.out.println(String.format(
-            "Loaded sprite sequence: %s (%d frames, size: %dx%d, display: %dx%d, offset: %d,%d)",
-            animationName, frames.size(), frameSize.width, frameSize.height, 
-            displaySize.width, displaySize.height, offsetX, offsetY));
-        
+        sprites.put(name, sprite);
         return sprite;
     }
     
     /**
-     * Simplified version with default offsets (0,0)
+     * Tries multiple naming patterns to load frames
      */
-    public Sprite loadSpriteSequence(
-            String animationName,
-            String basePath,
-            String baseFileName,
-            int frameCount,
-            Dimension frameSize,
-            double scale,
-            Duration duration,
-            boolean looping) {
-        
-        // Use default offsets (0,0)
-        return loadSpriteSequence(
-            animationName,
-            basePath,
-            baseFileName,
-            frameCount,
-            frameSize,
-            scale,
-            0,  // Default X offset
-            0,  // Default Y offset
-            duration,
-            looping
-        );
-    }
-    
-    /**
-     * Simplified version that assumes uniform scaling and requires offset values
-     */
-    public Sprite loadSpriteSequence(
-            String animationName,
-            String basePath,
-            String baseFileName,
-            int frameCount,
-            Dimension frameSize,
-            double scale,
-            int offsetX,
-            int offsetY,
-            Duration duration,
-            boolean looping) {
-        
-        // Calculate display size based on uniform scale
-        Dimension displaySize = new Dimension(
-            (int)(frameSize.width * scale),
-            (int)(frameSize.height * scale)
-        );
-        
-        return loadSpriteSequence(
-            animationName,
-            basePath,
-            baseFileName,
-            frameCount,
-            frameSize,
-            displaySize,
-            offsetX,
-            offsetY,
-            duration,
-            looping
-        );
-    }
-    
-    /**
-     * Complete version with custom file extension and start index
-     */
-    public Sprite loadSpriteSequence(
-            String animationName,
-            String basePath,
-            String baseFileName,
-            int frameCount,
-            int startIndex,
-            String fileExtension,
-            Dimension frameSize,
-            double scale,
-            Duration duration,
-            boolean looping) {
-        
-        // Use default offsets
-        return loadSpriteSequence(
-            animationName,
-            basePath,
-            baseFileName,
-            frameCount,
-            startIndex,
-            fileExtension,
-            frameSize,
-            scale,
-            0,  // Default X offset
-            0,  // Default Y offset
-            duration,
-            looping
-        );
-    }
-    
-    /**
-     * Complete version with custom file extension, start index and offsets
-     */
-    public Sprite loadSpriteSequence(
-            String animationName,
-            String basePath,
-            String baseFileName,
-            int frameCount,
-            int startIndex,
-            String fileExtension,
-            Dimension frameSize,
-            double scale,
-            int offsetX,
-            int offsetY,
-            Duration duration,
-            boolean looping) {
-        
-        // Calculate display size based on uniform scale
-        Dimension displaySize = new Dimension(
-            (int)(frameSize.width * scale),
-            (int)(frameSize.height * scale)
-        );
-        
-        // Check if already loaded
-        if (sprites.containsKey(animationName)) {
-            return sprites.get(animationName);
-        }
-        
-        // Construct the full path
-        String fullPath = BASE_PATH + basePath;
-        if (!basePath.endsWith("/") && !basePath.isEmpty()) {
-            fullPath += "/";
-        }
-        
-        // Load all frames
+    private List<BufferedImage> tryAlternativeNamingPatterns(String path, String framePrefix, int frameCount) {
         List<BufferedImage> frames = new ArrayList<>();
-        for (int i = 0; i < frameCount; i++) {
-            int frameIndex = startIndex + i;
-            String fileName = fullPath + baseFileName + frameIndex + fileExtension;
+        
+        String[][] patterns = {
+            // Try frame_01.png format
+            {"frame_%02d.png", ""},
+            // Try prefix_1.png format (no padding)
+            {"%s_%d.png", framePrefix},
+            // Try prefix01.png format
+            {"%s%02d.png", framePrefix},
+            // Try just numbers: 1.png
+            {"%d.png", ""},
+            // Try frame-1.png format
+            {"frame-%d.png", ""},
+            // Try lowercase prefix
+            {"%s%d.png", framePrefix.toLowerCase()}
+        };
+        
+        for (String[] pattern : patterns) {
+            frames.clear();
+            String format = pattern[0];
+            String prefix = pattern[1];
             
-            try {
-                BufferedImage frame = resourceManager.loadImage(fileName);
-                if (frame != null) {
-                    frames.add(frame);
-                } else {
-                    System.err.println("Failed to load frame: " + fileName);
+            for (int i = 1; i <= frameCount; i++) {
+                String fileName = path;
+                
+                try {
+                    if (prefix.isEmpty()) {
+                        fileName += String.format(format, i);
+                    } else {
+                        fileName += String.format(format, prefix, i);
+                    }
+                    
+                    BufferedImage frame = resourceManager.loadImage(fileName);
+                    if (frame != null) {
+                        frames.add(frame);
+                    } else {
+                        // Frame failed to load, break out of this pattern
+                        frames.clear();
+                        break;
+                    }
+                } catch (Exception e) {
+                    // Silently continue to next pattern
+                    frames.clear();
+                    break;
                 }
-            } catch (IOException e) {
-                System.err.println("Error loading frame " + fileName + ": " + e.getMessage());
+            }
+            
+            // If all frames loaded successfully, return them
+            if (frames.size() == frameCount) {
+                System.out.println("Successfully loaded frames using pattern: " + format);
+                return frames;
             }
         }
         
-        // If no frames were loaded, return null
-        if (frames.isEmpty()) {
-            System.err.println("No frames loaded for animation: " + animationName);
-            return null;
-        }
-        
-        // Store frames in cache
-        frameCache.put(animationName, frames);
-        
-        // Calculate scale factors
-        double scaleX = scale;
-        double scaleY = scale;
-        
-        // Create the sprite with adjustments
-        AdjustableSequenceSprite sprite = new AdjustableSequenceSprite(
-            animationName, 
-            frames, 
-            frameSize, 
-            scaleX, 
-            scaleY,
-            offsetX,
-            offsetY,
-            duration, 
-            looping
-        );
-        
-        sprites.put(animationName, sprite);
-        System.out.println(String.format(
-            "Loaded sprite sequence: %s (%d frames, start: %d, ext: %s, scale: %.1f, offset: %d,%d)",
-            animationName, frames.size(), startIndex, fileExtension, scale, offsetX, offsetY));
-        
-        return sprite;
+        return frames;
     }
     
     /**
-     * Gets a loaded sprite by name
+     * Gets a sprite by name
      */
     public Sprite getSprite(String name) {
-        Sprite sprite = sprites.get(name);
-        if (sprite == null) {
-            System.err.println("Warning: Sprite sequence not found: " + name);
-        }
-        return sprite;
+        return sprites.get(name);
     }
     
     /**
-     * Check if a sprite with the given name exists
+     * Checks if a sprite exists
      */
     public boolean hasSprite(String name) {
         return sprites.containsKey(name);
     }
     
     /**
-     * Clears all cached frames and sprites
+     * Clears the cache
      */
     public void clearCache() {
         sprites.clear();

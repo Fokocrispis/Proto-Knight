@@ -3,22 +3,48 @@ package game.sprites;
 import java.awt.Dimension;
 import java.awt.image.BufferedImage;
 import java.time.Duration;
+import java.util.List;
 
 /**
  * Extended sprite class with proper looping control
  */
-public class LoopingSprite extends ProperlyScaledSprite {
+public class LoopingSprite extends AdjustableSequenceSprite {
     private final boolean shouldLoop;
     private boolean hasCompleted = false;
     private int maxLoops = -1; // -1 for infinite loops
     private int currentLoops = 0;
     private int lastFrameIndex = -1;
     
-    public LoopingSprite(String name, BufferedImage spriteSheet, Dimension frameSize,
-                        double horizontalScale, double verticalScale,
-                        int firstFrame, int totalFrames, Duration duration, boolean shouldLoop) {
-        super(name, spriteSheet, frameSize, horizontalScale, verticalScale, firstFrame, totalFrames, duration);
+    /**
+     * Creates a new looping sprite with adjustable position and scaling
+     */
+    public LoopingSprite(
+            String name,
+            List<BufferedImage> frames,
+            Dimension frameSize,
+            double scaleX,
+            double scaleY,
+            int offsetX,
+            int offsetY,
+            Duration duration,
+            boolean shouldLoop) {
+        
+        super(name, frames, frameSize, scaleX, scaleY, offsetX, offsetY, duration, shouldLoop);
         this.shouldLoop = shouldLoop;
+    }
+    
+    /**
+     * Creates a simplified looping sprite with uniform scaling
+     */
+    public LoopingSprite(
+            String name,
+            List<BufferedImage> frames,
+            Dimension frameSize,
+            double scale,
+            Duration duration,
+            boolean shouldLoop) {
+        
+        this(name, frames, frameSize, scale, scale, 0, 0, duration, shouldLoop);
     }
     
     @Override
@@ -33,7 +59,9 @@ public class LoopingSprite extends ProperlyScaledSprite {
         super.update(deltaTime);
         
         // Check if we've completed a loop by detecting when we cycle back to frame 0
-        if (shouldLoop && lastFrameIndex != -1 && currentFrameIndex == 0 && lastFrameIndex != 0) {
+        if (shouldLoop && lastFrameIndex != -1 && 
+            currentFrameIndex == 0 && lastFrameIndex != 0) {
+            
             if (maxLoops > 0) {
                 currentLoops++;
                 if (currentLoops >= maxLoops) {
@@ -65,18 +93,22 @@ public class LoopingSprite extends ProperlyScaledSprite {
         return getFrameIndex() == (getTotalFrames() - 1);
     }
     
+    @Override
     public boolean isLooping() {
         return shouldLoop;
     }
     
+    @Override
     public boolean hasCompleted() {
         return hasCompleted;
     }
     
+    @Override
     public void setMaxLoops(int maxLoops) {
         this.maxLoops = maxLoops;
     }
     
+    @Override
     public int getCurrentLoops() {
         return currentLoops;
     }

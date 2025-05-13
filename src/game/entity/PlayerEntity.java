@@ -9,6 +9,7 @@ import game.Game;
 import game.Vector2D;
 import game.entity.component.BuffComponent;
 import game.entity.component.PlayerAnimationComponent;
+import game.entity.component.PlayerAttackComponent;
 import game.entity.component.PlayerInputComponent;
 import game.entity.component.PlayerPhysicsComponent;
 import game.entity.component.PlayerStateComponent;
@@ -106,6 +107,14 @@ public class PlayerEntity extends AbstractEntity {
         this.animationComponent = new PlayerAnimationComponent(this);
         this.buffComponent = new BuffComponent();
         
+        // Add all components to entity
+        addComponent(inputComponent);
+        addComponent(physicsComponent);
+        addComponent(stateComponent);
+        addComponent(animationComponent);
+        addComponent(buffComponent);
+        addComponent(new PlayerAttackComponent(this));
+        
         // Initialize physics properties
         this.mass = 1.0f;
         this.affectedByGravity = true;
@@ -137,6 +146,10 @@ public class PlayerEntity extends AbstractEntity {
         actionCooldowns.put("slide", 500L); // Can't slide again for 500ms
         actionCooldowns.put("dash", 600L); // Can't dash again for 600ms
         actionCooldowns.put("attack", 300L); // Can't attack again for 300ms
+        actionCooldowns.put("combo", 800L); // Combo cooldown
+        actionCooldowns.put("teleport", 800L); // Teleport cooldown
+        actionCooldowns.put("short_teleport", 400L); // Short teleport cooldown
+        actionCooldowns.put("hook", 1000L); // Hook cooldown
     }
     
     @Override
@@ -241,7 +254,10 @@ public class PlayerEntity extends AbstractEntity {
             lastTime = slideEndTime;
         } else if ("dash".equals(actionName)) {
             lastTime = dashStartTime;
-        } else if ("attack".equals(actionName)) {
+        } else if ("attack".equals(actionName) || "combo".equals(actionName)) {
+            lastTime = actionStartTime;
+        } else if ("teleport".equals(actionName) || "short_teleport".equals(actionName) || "hook".equals(actionName)) {
+            // These use the general action start time if nothing more specific is available
             lastTime = actionStartTime;
         }
         

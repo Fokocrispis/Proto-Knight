@@ -201,39 +201,6 @@ public class SpriteAdjustmentTool {
     }
     
     /**
-     * Reloads the current sprite with updated parameters
-     */
-    private void reloadCurrentSprite() {
-        if (currentAdjustmentName == null) return;
-        
-        SpriteAdjustment adjustment = adjustments.get(currentAdjustmentName);
-        if (adjustment == null) return;
-        
-        try {
-            // Load the sprite with current adjustment settings
-            Sprite sprite = sequenceManager.loadSpriteSequence(
-                "adj_" + adjustment.name,
-                adjustment.path,
-                adjustment.prefix,
-                adjustment.frameCount,
-                adjustment.sourceSize,
-                new Dimension(adjustment.displayWidth, adjustment.displayHeight),
-                adjustment.offsetX,
-                adjustment.offsetY,
-                Duration.ofMillis(adjustment.durationMs),
-                true
-            );
-            
-            if (sprite != null) {
-                // The sprite was loaded successfully
-                printCurrentAdjustment();
-            }
-        } catch (Exception e) {
-            System.err.println("Error reloading sprite: " + e.getMessage());
-        }
-    }
-    
-    /**
      * Print the current adjustment values
      */
     private void printCurrentAdjustment() {
@@ -338,6 +305,45 @@ public class SpriteAdjustmentTool {
             displayHeight = defaultDisplayHeight;
             offsetX = defaultOffsetX;
             offsetY = defaultOffsetY;
+        }
+    }
+    
+    /**
+     * Reloads the current sprite with updated parameters
+     */
+    private void reloadCurrentSprite() {
+        if (currentAdjustmentName == null) return;
+        
+        SpriteAdjustment adjustment = adjustments.get(currentAdjustmentName);
+        if (adjustment == null) return;
+        
+        try {
+            // Create display size based on current adjustment
+            Dimension displaySize = new Dimension(
+                adjustment.displayWidth,
+                adjustment.displayHeight
+            );
+            
+            // Load the sprite with current adjustment settings
+            Sprite sprite = sequenceManager.loadSpriteSequence(
+                "adj_" + adjustment.name,
+                adjustment.path,
+                adjustment.prefix,
+                adjustment.frameCount,
+                adjustment.sourceSize,
+                displaySize,
+                adjustment.offsetX,
+                adjustment.offsetY,
+                Duration.ofMillis(adjustment.durationMs),
+                true
+            );
+            
+            if (sprite != null) {
+                // The sprite was loaded successfully
+                printCurrentAdjustment();
+            }
+        } catch (Exception e) {
+            System.err.println("Error reloading sprite: " + e.getMessage());
         }
     }
 }

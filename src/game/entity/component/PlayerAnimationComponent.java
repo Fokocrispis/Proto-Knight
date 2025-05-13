@@ -10,15 +10,18 @@ import game.entity.PlayerEntity;
 import game.entity.PlayerState;
 import game.entity.component.Component.ComponentType;
 import game.sprites.AdjustableSequenceSprite;
+import game.sprites.CharacterAnimationManager;
 import game.sprites.LoopingSprite;
 import game.sprites.Sprite;
-import game.sprites.SpriteSheetManager;
 
 public class PlayerAnimationComponent implements Component {
     private final PlayerEntity player;
     private Sprite currentSprite;
     private final Map<PlayerState, Sprite> stateSprites = new HashMap<>();
     private final Map<String, Sprite> contextualSprites = new HashMap<>();
+    
+    // Character animation manager
+    private final CharacterAnimationManager animationManager;
     
     // Sprite dimensions
     private static final int HITBOX_WIDTH = 40;
@@ -32,6 +35,14 @@ public class PlayerAnimationComponent implements Component {
     
     public PlayerAnimationComponent(PlayerEntity player) {
         this.player = player;
+        
+        // Initialize animation manager with character ID
+        this.animationManager = new CharacterAnimationManager("Joanna");
+        
+        // Load all character animations
+        animationManager.loadAllAnimations();
+        
+        // Map animations to states
         loadSprites();
     }
     
@@ -41,52 +52,30 @@ public class PlayerAnimationComponent implements Component {
     }
     
     private void loadSprites() {
-        SpriteSheetManager spriteManager = new SpriteSheetManager();
-        spriteManager.createPlayerSprites();
+        // Map character animations to player states
+        stateSprites.put(PlayerState.IDLE, animationManager.getAnimation("idle"));
+        stateSprites.put(PlayerState.WALKING, animationManager.getAnimation("run"));
+        stateSprites.put(PlayerState.RUNNING, animationManager.getAnimation("run"));
+        stateSprites.put(PlayerState.ATTACKING, animationManager.getAnimation("light_attack"));
+        stateSprites.put(PlayerState.DASHING, animationManager.getAnimation("dash"));
+        stateSprites.put(PlayerState.LANDING, animationManager.getAnimation("land"));
         
-        // Basic movement sprites
-        stateSprites.put(PlayerState.IDLE, spriteManager.getSprite("player_idle"));
-        stateSprites.put(PlayerState.WALKING, spriteManager.getSprite("player_walk"));
-        stateSprites.put(PlayerState.RUNNING, spriteManager.getSprite("player_run"));
-        stateSprites.put(PlayerState.JUMPING, spriteManager.getSprite("player_jump"));
-        stateSprites.put(PlayerState.FALLING, spriteManager.getSprite("player_fall"));
-        stateSprites.put(PlayerState.DASHING, spriteManager.getSprite("player_dash"));
-        stateSprites.put(PlayerState.LANDING, spriteManager.getSprite("player_land_quick"));
-        stateSprites.put(PlayerState.SLIDING, spriteManager.getSprite("player_slide"));
-        stateSprites.put(PlayerState.ATTACKING, spriteManager.getSprite("player_roll"));
+        // Setup contextual sprites for different states/transitions
+        contextualSprites.put("turn_left", animationManager.getAnimation("break_run"));
+        contextualSprites.put("turn_right", animationManager.getAnimation("break_run"));
+        contextualSprites.put("run_to_stop", animationManager.getAnimation("break_run"));
+        contextualSprites.put("run_start", animationManager.getAnimation("to_run"));
         
-        // FIX: Add these contextual sprites for better crouching
-        contextualSprites.put("crouching_idle", spriteManager.getSprite("player_crouch"));
-        contextualSprites.put("crouching_walk", spriteManager.getSprite("player_crawl"));
-        contextualSprites.put("crouching", spriteManager.getSprite("player_crouch")); // Fallback
-        
-        // Contextual sprites for combined states
-        contextualSprites.put("turn_left", spriteManager.getSprite("player_run_turning"));
-        contextualSprites.put("turn_right", spriteManager.getSprite("player_run_turning"));
-        contextualSprites.put("run_to_stop", spriteManager.getSprite("player_run_stop"));
-        contextualSprites.put("run_start", spriteManager.getSprite("player_run_start"));
-        
-        // Air movement
-        contextualSprites.put("jump_running", spriteManager.getSprite("player_jump"));
-        contextualSprites.put("jump_dashing", spriteManager.getSprite("player_jump"));
-        contextualSprites.put("fall_running", spriteManager.getSprite("player_fall"));
-        contextualSprites.put("fall_dashing", spriteManager.getSprite("player_fall"));
-        
-        // Landing animations
-        contextualSprites.put("landing_normal", spriteManager.getSprite("player_land_quick"));
-        contextualSprites.put("landing_running", spriteManager.getSprite("player_land_full"));
-        contextualSprites.put("landing_dashing", spriteManager.getSprite("player_roll"));
-        contextualSprites.put("landing_crouching", spriteManager.getSprite("player_land_full"));
-        
-        // Sliding and crouching
-        contextualSprites.put("sliding", spriteManager.getSprite("player_slide"));
-        
-        // Dash states
-        contextualSprites.put("dash_start", spriteManager.getSprite("player_dash"));
-        contextualSprites.put("dash_end", spriteManager.getSprite("player_land_quick"));
+        // Common action sprites
+        contextualSprites.put("light_attack", animationManager.getAnimation("light_attack"));
+        contextualSprites.put("dash", animationManager.getAnimation("dash"));
+        contextualSprites.put("land", animationManager.getAnimation("land"));
         
         // Set initial sprite
         currentSprite = stateSprites.get(PlayerState.IDLE);
+        
+        // Print loaded animations for debugging
+        animationManager.printLoadedAnimations();
     }
     
     private void updateSprite(long deltaTime) {
@@ -120,101 +109,85 @@ public class PlayerAnimationComponent implements Component {
         }
     }
     
+    /**
+     * Gets an animation by name
+     */
+    public Sprite getAnimation(String name) {
+        // First check state sprites
+        for (Map.Entry<PlayerState, Sprite> entry : stateSprites.entrySet()) {
+            if (entry.getKey().name().toLowerCase().equals(name.toLowerCase())) {
+                return entry.getValue();
+            }
+        }
+        
+        // Then check contextual sprites
+        Sprite sprite = contextualSprites.get(name);
+        if (sprite != null) {
+            return sprite;
+        }
+        
+        // Then check if animation manager has it
+        return animationManager.getAnimation(name);
+    }
+    
     public void updateSpriteForState() {
         Sprite newSprite = null;
         PlayerState currentState = player.getCurrentState();
         PlayerStateComponent.MovementContext context = player.getMovementContext();
         
+        // Check if there's a Combat component for special attack states
+        PlayerAttackComponent attackComponent = null;
+        if (player.hasComponent(ComponentType.COMBAT)) {
+            attackComponent = player.getComponent(ComponentType.COMBAT);
+        }
+        
         // Choose sprite based on state and context
         switch (currentState) {
+            case ATTACKING:
+                newSprite = contextualSprites.get("light_attack");
+                if (newSprite == null) {
+                    newSprite = stateSprites.get(PlayerState.ATTACKING);
+                }
+                break;
+                
             case RUNNING:
                 if (player.isTurning()) {
                     newSprite = contextualSprites.get("turn_" + (player.isFacingRight() ? "right" : "left"));
                 } else {
-                    newSprite = stateSprites.get(PlayerState.RUNNING);
-                }
-                break;
-                
-            case JUMPING:
-                switch (context) {
-                    case RUNNING:
-                        newSprite = contextualSprites.get("jump_running");
-                        break;
-                    case DASHING:
-                        newSprite = contextualSprites.get("jump_dashing");
-                        break;
-                    default:
-                        newSprite = stateSprites.get(PlayerState.JUMPING);
-                        break;
-                }
-                break;
-                
-            case FALLING:
-                switch (context) {
-                    case DASHING:
-                        newSprite = contextualSprites.get("fall_dashing");
-                        break;
-                    case RUNNING:
-                        newSprite = contextualSprites.get("fall_running");
-                        break;
-                    default:
-                        newSprite = stateSprites.get(PlayerState.FALLING);
-                        break;
-                }
-                break;
-                
-            case LANDING:
-                switch (context) {
-                    case RUNNING:
-                        newSprite = contextualSprites.get("landing_running");
-                        break;
-                    case DASHING:
-                        newSprite = contextualSprites.get("landing_dashing");
-                        break;
-                    case CROUCHING:
-                        newSprite = contextualSprites.get("landing_crouching");
-                        break;
-                    default:
-                        newSprite = contextualSprites.get("landing_normal");
-                        break;
-                }
-                break;
-                
-            case SLIDING:
-                newSprite = contextualSprites.get("sliding");
-                if (newSprite == null) {
-                    newSprite = stateSprites.get(PlayerState.SLIDING);
-                }
-                break;
-                
-            case IDLE:
-            case WALKING:
-                // FIX: Better crouching sprite selection
-                if (context == PlayerStateComponent.MovementContext.CROUCHING) {
-                    // Use different crouching sprites for idle and walking if available
-                    String spriteKey = currentState == PlayerState.IDLE ? 
-                        "crouching_idle" : "crouching_walk";
+                    // Check if we're just starting to run
+                    double speed = Math.abs(player.getVelocity().getX());
+                    long runTime = System.currentTimeMillis() - player.getStateChangeTime();
                     
-                    newSprite = contextualSprites.get(spriteKey);
-                    
-                    // Fallback to generic crouching sprite if specific ones aren't available
-                    if (newSprite == null) {
-                        newSprite = contextualSprites.get("crouching");
+                    if (runTime < 200 && speed < 400) {
+                        // We're just starting to run
+                        newSprite = contextualSprites.get("run_start");
+                    } else {
+                        newSprite = stateSprites.get(PlayerState.RUNNING);
                     }
-                    
-                    // Last resort fallback to normal sprites if no crouching sprites exist
-                    if (newSprite == null) {
-                        newSprite = stateSprites.get(currentState);
-                    }
-                } else {
-                    newSprite = stateSprites.get(currentState);
                 }
                 break;
                 
             case DASHING:
-                newSprite = contextualSprites.get("dash_" + (player.isDashing() ? "start" : "end"));
+                newSprite = contextualSprites.get("dash");
                 if (newSprite == null) {
                     newSprite = stateSprites.get(PlayerState.DASHING);
+                }
+                break;
+                
+            case LANDING:
+                newSprite = contextualSprites.get("land");
+                if (newSprite == null) {
+                    newSprite = stateSprites.get(PlayerState.LANDING);
+                }
+                break;
+                
+            case WALKING:
+                // Check velocity to decide between walking and running
+                double speed = Math.abs(player.getVelocity().getX());
+                if (speed > 400) {
+                    newSprite = stateSprites.get(PlayerState.RUNNING);
+                } else {
+                    newSprite = stateSprites.get(PlayerState.WALKING);
                 }
                 break;
                 
@@ -229,7 +202,6 @@ public class PlayerAnimationComponent implements Component {
             resetCurrentSprite();
         }
     }
-    
     private void resetCurrentSprite() {
         if (currentSprite instanceof LoopingSprite) {
             ((LoopingSprite) currentSprite).reset();
@@ -284,6 +256,12 @@ public class PlayerAnimationComponent implements Component {
             g.setColor(Color.CYAN);
             g.drawLine((int)player.getPosition().getX(), (int)player.getPosition().getY(), 
                       (int)player.getHookTarget().getX(), (int)player.getHookTarget().getY());
+        }
+        
+        // Draw attack hitboxes if in combat and debug mode
+        if (debugRender && player.hasComponent(ComponentType.COMBAT)) {
+            PlayerAttackComponent attackComponent = player.getComponent(ComponentType.COMBAT);
+            attackComponent.renderDebug(g);
         }
         
         // Draw debug info when enabled
@@ -354,8 +332,9 @@ public class PlayerAnimationComponent implements Component {
                 sprite.getSize().width, sprite.getSize().height,
                 sprite.getOffsetX(), sprite.getOffsetY());
         } else if (currentSprite != null) {
-            spriteInfo = String.format("Standard: %dx%d", 
-                currentSprite.getSize().width, currentSprite.getSize().height);
+            spriteInfo = String.format("Standard: %dx%d [%d/%d]", 
+                currentSprite.getSize().width, currentSprite.getSize().height,
+                currentSprite.getFrameIndex() + 1, currentSprite.getTotalFrames());
         }
         
         g.drawString(spriteInfo, (int)player.getPosition().getX() - 80, (int)player.getPosition().getY() - 100);
@@ -371,8 +350,22 @@ public class PlayerAnimationComponent implements Component {
         if (player.isSliding()) flagsInfo.append("SLIDE ");
         if (player.isDashing()) flagsInfo.append("DASH ");
         if (player.isJumping()) flagsInfo.append("JUMP ");
+        if (player.isAttacking()) flagsInfo.append("ATTACK ");
+        
+        // Add combo info if in combat state
+        PlayerAttackComponent attackComponent = null;
+        if (player.hasComponent(ComponentType.COMBAT)) {
+            attackComponent = player.getComponent(ComponentType.COMBAT);
+            if (attackComponent.isComboAttacking()) {
+                flagsInfo.append("COMBO(").append(attackComponent.getComboCount()).append(") ");
+            }
+        }
         
         g.drawString(flagsInfo.toString(), (int)player.getPosition().getX() - 80, (int)player.getPosition().getY() - 60);
+        
+        // Show animation info
+        g.drawString("Animation: " + (currentSprite != null ? currentSprite.getName() : "none"), 
+                   (int)player.getPosition().getX() - 80, (int)player.getPosition().getY() - 40);
     }
     
     public void toggleDebugRender() {
@@ -381,6 +374,39 @@ public class PlayerAnimationComponent implements Component {
     
     public Sprite getCurrentSprite() {
         return currentSprite;
+    }
+    
+    /**
+     * Handles transition from running to walking or idle
+     */
+    private void handleRunningSlowdown(float dt) {
+        // Only handle when on ground and not animation-locked
+        if (!player.isOnGround() || player.isAnimationLocked()) return;
+        
+        // Check if we're running but slowing down
+        if (player.getCurrentState() == PlayerState.RUNNING) {
+            double speed = Math.abs(player.getVelocity().getX());
+            double targetSpeed = Math.abs(player.getTargetVelocityX());
+            
+            // If we're slowing down significantly
+            if (speed > 400 && targetSpeed < 100) {
+                // Special transition animation from running to stop
+                player.setCurrentState(PlayerState.IDLE);
+                player.setMovementContext(PlayerStateComponent.MovementContext.NORMAL);
+                
+                // Use the run_to_stop animation
+                if (player.hasComponent(ComponentType.ANIMATION)) {
+                    PlayerAnimationComponent animComponent = player.getComponent(ComponentType.ANIMATION);
+                    Sprite runToStopSprite = animComponent.getAnimation("run_to_stop");
+                        
+                    if (runToStopSprite != null) {
+                        // Lock animation for the transition
+                        player.lockAnimation(400);
+                        player.updateSpriteForState();
+                    }
+                }
+            }
+        }
     }
 
     @Override
