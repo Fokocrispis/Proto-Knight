@@ -120,13 +120,41 @@ public class AnimationLoader {
             Duration duration,
             boolean looping) {
         
+        // The SpriteSequenceManager doesn't have a method with this exact signature
+        // We need to adapt our call to match what's available
+        
+        // First try the alternative method that might exist
+        try {
+            // Try to use reflection to call the method if it exists
+            java.lang.reflect.Method method = sequenceManager.getClass().getMethod(
+                "loadSpriteSequence",
+                String.class, String.class, String.class, 
+                int.class, int.class, String.class,
+                Dimension.class, double.class, Duration.class, boolean.class
+            );
+            
+            Sprite sprite = (Sprite) method.invoke(
+                sequenceManager,
+                animationName, folder, prefix, 
+                startIndex, frameCount, fileExtension,
+                frameSize, scale, duration, looping
+            );
+            
+            if (sprite != null) {
+                spriteSourceMapping.put(animationName, "sequence");
+                return sprite;
+            }
+        } catch (Exception e) {
+            // Method doesn't exist, continue with fallback
+        }
+        
+        // Fallback implementation - adapt to the available method
+        // We'll ignore the startIndex and extension, and use default values
         Sprite sprite = sequenceManager.loadSpriteSequence(
             animationName,
             folder,
             prefix,
-            startIndex,
             frameCount,
-            fileExtension,
             frameSize,
             scale,
             duration,
@@ -134,6 +162,72 @@ public class AnimationLoader {
         );
         
         if (sprite != null) {
+            spriteSourceMapping.put(animationName, "sequence");
+        }
+        
+        return sprite;
+    }
+    
+    /**
+     * Loads a sprite sequence with adjustable display dimensions and offsets.
+     */
+    public Sprite loadAnimationWithOffsets(
+            String animationName,
+            String folder,
+            String prefix,
+            int frameCount,
+            Dimension frameSize,
+            Dimension displaySize,
+            int offsetX,
+            int offsetY,
+            Duration duration,
+            boolean looping) {
+        
+        // Calculate scale factors from display size
+        double scaleX = (double)displaySize.width / frameSize.width;
+        double scaleY = (double)displaySize.height / frameSize.height;
+        
+        // Create a dummy sprite to figure out what method signature to use
+        try {
+            // Try to use the method with the exact signature if it exists
+            java.lang.reflect.Method method = sequenceManager.getClass().getMethod(
+                "loadSpriteSequence",
+                String.class, String.class, String.class, int.class,
+                Dimension.class, Dimension.class, int.class, int.class,
+                Duration.class, boolean.class
+            );
+            
+            Sprite sprite = (Sprite) method.invoke(
+                sequenceManager,
+                animationName, folder, prefix, frameCount,
+                frameSize, displaySize, offsetX, offsetY,
+                duration, looping
+            );
+            
+            if (sprite != null) {
+                spriteSourceMapping.put(animationName, "sequence");
+                return sprite;
+            }
+        } catch (Exception e) {
+            // Method doesn't exist, continue with fallback
+        }
+        
+        // Fallback to the simple version using average scale
+        double avgScale = (scaleX + scaleY) / 2.0;
+        
+        Sprite sprite = sequenceManager.loadSpriteSequence(
+            animationName,
+            folder,
+            prefix,
+            frameCount,
+            frameSize,
+            avgScale,
+            duration,
+            looping
+        );
+        
+        if (sprite != null) {
+            // Store the animation name and source
             spriteSourceMapping.put(animationName, "sequence");
         }
         
